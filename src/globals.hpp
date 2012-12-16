@@ -1,0 +1,112 @@
+/*
+ * globas.hpp
+ *
+ *  Created on: Mar 18, 2011
+ *      Author: dfermin
+ */
+
+#ifndef GLOBAS_HPP_
+#define GLOBAS_HPP_
+
+#define DEBUG
+
+#include <vector>
+#include <string>
+#include <map>
+#include <set>
+#include <list>
+
+using namespace std;
+
+
+/****************
+ * Global variables go here
+ ****************/
+extern string g_srcXMLfile; // name of pepXML file to parse by regex
+extern string g_srcDir; // holds name of folder with the spectral files
+extern string g_ext; // holds spectrum file format (mzXML or mzML, etc..)
+extern string cmdLineArgs; // holds user-given command line arguments
+extern string g_outputName;  // holds users' chosen output tag
+extern bool g_writeDTA; // if true, user wants to write spectra to disk
+extern bool g_userDefinedOutput; // true means the user gave a name for the output file
+extern double g_prob_threshold; // min. probability a peptide must have to be parsed
+extern double g_model_prob; // min. prob. a peptide must have to be used for modeling
+extern double g_MZ_ERR; // // fragment ion mass tolerance
+extern double g_MIN_I; // min. intensity a peak needs to be considered for matching
+extern double g_MIN_DIST; // min. distance (in log scale) tolerated for unmatched peaks
+extern map<char, double> AAmass; // hold masses for amino acids
+extern bool g_DEBUG_MODE; // true means the program is running in debug mode
+extern bool g_FULL_MONTY; // true means the program should score and report all spectra
+extern bool g_IS_HCD; // true means the data being processed is HCD data
+extern bool g_NO_NL_PEAKS; // true means that neutral loss fragment ions will not be considered at all
+extern bool g_NO_NL_PEAKS_MODEL; // true means that neutral loss fragment ions will not be used for modeling
+extern bool g_NL_MODEL_ONLY; // true means that neutral loss peaks will only be considered for building the model
+extern bool g_runAscoreInstead; // true means the user wants to run the Ascore algorithm on the data
+extern bool g_randDecoyAA;
+extern bool g_singleLetter;
+extern bool g_LIMIT_CHARGE_STATE;
+extern bool g_WRITE_TOP_TWO;
+extern bool g_captureChargeStateModel; // in case you can't model a charge state, use the next closest charge states' parameters
+extern bool g_useOnlySiteDetermIons; // when true, only site determining ions will be used in scoring a PSM (Luciphor only option)
+extern bool g_usePPM;
+extern string g_BUILD_TIME;
+
+extern string g_scoringMethod; // used to manage scoring metric
+extern double g_dist_adj;
+extern double g_NUM_PERMS_LIMIT;
+extern double MIN_MZ;   // lowest m/z value we'll consider
+extern int g_NUM_THREADS;
+extern int g_intensityType;
+extern int g_progressCtr;
+extern int g_totalNumPSM;
+extern int g_CHARGE_STATE;
+extern map<char, string> modAAmap;
+extern map<char, char> decoyAA;
+
+// Global constants
+const double TINY_NUM = 1e-10; // represents a tiny number
+const double BIG_NUM = 1e10; // represents a tiny number
+const double PPM = 1e-6; // parts per million
+
+
+/*
+ * Global function declarations
+ */
+void print_usage();
+void parse_command_line_args(int argc, char *argv[]);
+void initialize_AA_masses();
+void addAAmass(string AA, double mass, char isVar);
+void printProgress(string txt, int ctr, int N);
+void parse_alternative_scoring(string *scoringStr, string *modelingStr);
+
+
+double round_dbl(double r, int places);
+double str2dbl(string ch);
+
+vector<string> split_string(string line);
+
+string upperCaseSTY(string src);
+string uc(string src);
+string int2string(int i);
+string dbl2string(double d);
+string getTimeStamp();
+string genRandDecoyPeptide(string srcSeq, int numSites);
+string getExecutionParameters();
+string repModAAchar(string *srcPtr);
+string reverseString(string input);
+
+double Factorial(double x); // used to compute factorials (n!)
+double combinatorial(double n, double k);  //used to compute combinatorials (n choose k)
+
+bool dbl_isnan(double var);
+bool isInfinite(double pV);
+bool hasChar(string txt, string ch);
+bool containsPhosphoSite(string txt);
+bool containsSTY(string txt);
+bool isDecoyPep(string *srcPtr);
+bool allValidAAs(string *srcPtr);
+bool fileExists(const string& filename);
+
+set< vector<int> > generateBinaryGrid(double L, double k);
+
+#endif /* GLOBAS_HPP_ */

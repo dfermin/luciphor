@@ -1,0 +1,26 @@
+
+exe luciphor
+	: ## sources
+		[ glob ./src/*.cpp ]
+	: ## requirements
+		<include>./pwiz_root/boost_1_34_0
+		<include>./pwiz_root/boost_1_34_0/boost
+		<include>./pwiz_root/boost_1_34_0/libs
+		<include>./pwiz_root/libraries/boost_aux
+		<include>./pwiz_root/pwiz
+		<library>./pwiz_root/pwiz_tools/common//pwiz_tools_common
+		<library>./pwiz_root/pwiz/data/msdata//pwiz_data_msdata
+		<include>./pwiz_root/pwiz/utility/misc//pwiz_utility_misc
+	: ## requirements
+		<warnings>off
+		#<warnings>all
+		<threading>multi
+		<toolset>gcc
+		<link>static
+		#<cxxflags> 
+		<optimization>speed
+		<variant>release
+		#<variant>debug
+	: ## default-build
+	;
+
