@@ -38,6 +38,7 @@ private:
 	double numDecoyPermutations;
 	double iniProb;
 	double delta_top2peaks; // holds the difference between the top 2 most intense peak of spectrum
+	double max_mz; // maximum m/z value observed for spectrum
 	double min_intensity;
 	double max_intensity; // maximum intensity observed from RAW peaks
 	double median_intensity; // the median peak intensity for the spectrum
@@ -98,6 +99,7 @@ public:
 	void scorePermutations();
 	void classifyPeaks();
 	void randomizeSeq();
+	void binPeaks();
 	void deisotopeSpectrum();
 
 	void calcUnmatchedPeakParams();
