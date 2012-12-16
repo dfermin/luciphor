@@ -216,6 +216,8 @@ void PSMClass::recordSpectrum(SpecStruct spec) {
 
 	delete(all_intensities); all_intensities = NULL;
 
+	//deisotopeSpectrum();
+
 	normalizeSpectrum(); // scale spectrum to be in the range of 0-100
 	//reduceNeutralLossPeak(); // now that you normalized the spectrum, reduce the impact of the NL peak
 	medianNormalizeIntensities(); // divide the intensities by their median value
@@ -1828,12 +1830,13 @@ void PSMClass::randomizeSeq() {
 
 
 
+
 // Perform deisotoping of spectrum
 void PSMClass::deisotopeSpectrum() {
 	map<double, double> peakClass; // k = an observed peak, v = it's monoisotopic parent (if any)
 	map<double, vector<double> >::iterator curPeak;
 	deque<double> mzValues;
-	double curMZ, mz_err, nextMZ, delta;
+	double curMZ, obs_mz, delta, theo_mz;
 	const double DA_ERR = 0.01; // about 10ppm
 	int N = 0;
 
@@ -1846,30 +1849,21 @@ void PSMClass::deisotopeSpectrum() {
 	N = (signed) mzValues.size();
 	sort( mzValues.begin(), mzValues.end() ); // sort m/z values from low to high
 
-	for(double z = 1; z < 3; z++) { // charge states up to 2 for isotopic peaks
-		mz_err = (1.0/z) + DA_ERR;
+	for(double z = 1; z < 3; z++) { // assume isotopic peaks up to charge states of 2;
 
 		for(int i = 0; i < N; i++) {
 			curMZ = mzValues.at(i);
 
-			if(i == 0) { // the first peak is it's own monoisotopic peak
-				peakClass[ curMZ ] = curMZ;
-				continue;
-			}
+			for(double j = 1; j < 4; j++) { // up to 3 isotopic peak
+				theo_mz = curMZ + ((1.0/z) * j); // current theoretical isotopic peak for 'curMZ'
 
-			int stop = (i+4);
-			if(stop >= (N-1)) stop = N;
+				for(int k = (i+1); k < N; k++) {
+					obs_mz = mzValues.at(k);
+					delta = fabs(obs_mz - theo_mz);
 
-			for(int j = (i+1); j < stop; j++) { // up to 3 isotopic peak
-				nextMZ = mzValues.at(j);
-
-				// if this is true the peak has already been grouped with a monoisotopic parent peak
-				if( peakClass[ nextMZ ] != 0 ) continue;
-
-				delta = fabs(curMZ - nextMZ);
-				if( delta <= mz_err ) peakClass[ nextMZ ] = curMZ;
-
-				//cout << "i=" << i << ", j=" << j << "  curMZ=" << curMZ << "\tnextMZ=" << nextMZ << "\tdelta=" << delta << endl;
+					if(delta < DA_ERR) peakClass[ obs_mz ] = curMZ;
+					else if(obs_mz > theo_mz) break;
+				}
 			}
 		}
 	}
@@ -1884,11 +1878,7 @@ void PSMClass::deisotopeSpectrum() {
 		if(pClass != 0) {
 			curPeak = raw_spectrum.find(curMZ);
 			raw_spectrum.erase(curPeak);
-//			curPeak->second.at(0) = 0;
-//			curPeak->second.at(1) = 0;
-//			curPeak->second.at(2) = 0;
 		}
 	}
 }
-
 

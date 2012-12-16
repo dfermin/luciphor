@@ -599,7 +599,7 @@ void estimateNonparamInt_U(list<double> *ptr, modelParamStruct *paramPtr, double
 	jj = 0;
 	// iterate over real observations
 	for(curScore = X->begin(); curScore != X->end(); curScore++) {
-		if(fabs(*curScore) <= mz_err /*&& fabs(*curScore) > 0.05*/) {
+		if(fabs(*curScore) <= mz_err) {
 			jj++;
 		}
 	}
@@ -610,7 +610,7 @@ void estimateNonparamInt_U(list<double> *ptr, modelParamStruct *paramPtr, double
 		tmp_sum = 0;
 		// iterate over real observations
 		for(curScore = X->begin(); curScore != X->end(); curScore++) {
-			if(fabs(*curScore) <= mz_err /*&& fabs(*curScore) > 0.05*/) {
+			if(fabs(*curScore) <= mz_err) {
 				tmp_sum += normalDensity( *tic, *curScore, paramPtr->bw_int_U );
 			}
 		}
