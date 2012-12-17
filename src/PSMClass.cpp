@@ -193,8 +193,7 @@ void PSMClass::recordSpectrum(SpecStruct spec) {
 	list<double> *all_intensities = NULL;
 	vector<double> *v = NULL;
 	max_intensity = 0;
-	max_mz = 0;
-	//all_intensities = new list<double>();
+	all_intensities = new list<double>();
 
 	for(int i = 0; i < N; i++) {
 		curMZ = spec.mz.at(i);
@@ -202,10 +201,7 @@ void PSMClass::recordSpectrum(SpecStruct spec) {
 
 		if(curMZ == 0) continue;
 		if(curI == 0) continue;
-		//all_intensities->push_back( curI );
-
-		if(curMZ > max_mz) max_mz = curMZ;
-		if(curI > max_intensity) max_intensity = curI;
+		all_intensities->push_back( curI );
 
 		v = new vector<double>;
 		v->reserve(3);
@@ -215,13 +211,13 @@ void PSMClass::recordSpectrum(SpecStruct spec) {
 		delete(v); v = NULL;
 	}
 
-//	all_intensities->sort(); // sorted low to high
-//	max_intensity = all_intensities->back(); // most intense value is last
-//
-//	delete(all_intensities); all_intensities = NULL;
+	all_intensities->sort(); // sorted low to high
+	max_intensity = all_intensities->back(); // most intense value is last
 
-	deisotopeSpectrum();
-	//binPeaks();
+	delete(all_intensities); all_intensities = NULL;
+
+	if(g_IS_HCD) deisotopeSpectrum();
+
 	normalizeSpectrum(); // scale spectrum to be in the range of 0-100
 	//reduceNeutralLossPeak(); // now that you normalized the spectrum, reduce the impact of the NL peak
 	medianNormalizeIntensities(); // divide the intensities by their median value
@@ -365,50 +361,6 @@ void PSMClass::reduceNeutralLossPeak() {
 	}
 	bm.clear();
 	delete(NL_intensity_list); NL_intensity_list = NULL;
-}
-
-
-
-
-// Function combines peak intensities into bins fragmented based upon the
-// fragment ion tolerance given by the user
-void PSMClass::binPeaks() {
-	map<double, vector<double> >::iterator curPeak;
-	map<double, vector<double> > binMap;
-	vector<double> *v = NULL;
-	double mz, intensity;
-	double i, j;
-	double startMZ = MIN_MZ - g_MZ_ERR;
-	double endMZ   = max_mz + g_MZ_ERR;
-	double C = round_dbl((g_MZ_ERR * 5.0), 0 );
-
-
-	// initialize new map
-	for(mz = startMZ; mz <= endMZ; mz += g_MZ_ERR) {
-		v = new vector<double>(3,0);
-		binMap[ mz ] = *v;
-		delete(v);
-	}
-
-	for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
-		mz = curPeak->first;
-		intensity = curPeak->second.at(0);
-
-		startMZ = round_dbl(mz, 0) - C;
-		endMZ   = round_dbl(mz, 0) + C;
-
-		for(i = startMZ; i < endMZ; i += g_MZ_ERR) {
-			j = i + g_MZ_ERR;
-
-			if( (mz >= i) && (mz < j) ) {
-				binMap[ i ].at(0) += intensity;
-				break;
-			}
-		}
-	}
-
-	raw_spectrum.clear();
-	raw_spectrum = binMap;
 }
 
 

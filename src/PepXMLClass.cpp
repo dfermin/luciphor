@@ -1136,6 +1136,7 @@ void PepXMLClass::openLogFile() {
 		logName += ".ascore-" + getTimeStamp() + ".log";
 	}
 
+	cerr << "\tLog file: " << logName << endl;
 
 	logF.open(logName.c_str(), ios::out);
 	if(!logF) {

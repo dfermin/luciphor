@@ -3,9 +3,9 @@ exe luciphor
 	: ## sources
 		[ glob ./src/*.cpp ]
 	: ## requirements
-		<include>./pwiz_root/boost_1_34_0
-		<include>./pwiz_root/boost_1_34_0/boost
-		<include>./pwiz_root/boost_1_34_0/libs
+		<include>./pwiz_root/boost_1_43_0
+		<include>./pwiz_root/boost_1_43_0/boost
+		<include>./pwiz_root/boost_1_43_0/libs
 		<include>./pwiz_root/libraries/boost_aux
 		<include>./pwiz_root/pwiz
 		<library>./pwiz_root/pwiz_tools/common//pwiz_tools_common

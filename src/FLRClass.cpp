@@ -19,7 +19,7 @@
 
 using namespace std;
 
-const int NMARKS = 501; // we want N+1 bins; here N = 500
+const int NMARKS = 10001; // we want N+1 bins; here N = 500
 
 const double PI = 4*atan(1);
 
@@ -38,8 +38,10 @@ FLRClass::FLRClass(deque<flrStruct> *ptr, double d) {
 
 	deque<flrStruct>::iterator iter;
 	for(iter = allPSMs.begin(); iter != allPSMs.end(); iter++) {
+		if(iter->deltaScore >= 0.5) { 
 			if(iter->isDecoy) decoyDeq.push_back( *iter );
 			else realDeq.push_back( *iter );
+		}
 	}
 
 
@@ -48,6 +50,7 @@ FLRClass::FLRClass(deque<flrStruct> *ptr, double d) {
 
 	// initialize tickMarks deque
 	tickMarks.resize(NMARKS);
+	tickMarks[0] = 0.0;
 	for(int i = 0; i < NMARKS; i++) {
 		tickMarks[i] = ((double) i) * maxDeltaScore / (double) NMARKS;
 	}
@@ -82,7 +85,8 @@ void FLRClass::getBandWidth(string x) {
 
 	ret = 1.06 * (sigma / pow(N, 0.2) );
 
-	ret *= 0.1;
+	if(x.compare("real")== 0) ret *= 0.1;
+	else ret *= 0.02;
 
 	if(x.compare("real")== 0) bw_real = ret;
 	else bw_decoy = ret;
@@ -158,7 +162,7 @@ void FLRClass::evalTickMarks() {
 		}
 		sum *= ( 1.0 / ( ((double)Nreal) * bw_real ) );
 
-		f1.at(i++) = sum;
+		f1.at(i++) = sum > TINY_NUM ? sum : TINY_NUM;
 	}
 
 
@@ -174,7 +178,7 @@ void FLRClass::evalTickMarks() {
 		}
 		sum *= ( 1.0 / ( ((double)Ndecoy) * bw_decoy ) );
 
-		f0.at(i++) = sum;
+		f0.at(i++) = sum > TINY_NUM ? sum : TINY_NUM;
 	}
 }
 
@@ -183,6 +187,7 @@ void FLRClass::evalTickMarks() {
 
 // Function computes the local and global FDRs
 void FLRClass::calcBothFDRs() {
+	double tmp_score;
 	double AUC_rev_0 = 0; // Area-Under the-Curve from end of tick marks working backwards (f0 data)
 	double AUC_rev_1 = 0; // Area-Under the-Curve from end of tick marks working backwards (f1 data)
 	double ratio = 0;
@@ -192,10 +197,12 @@ void FLRClass::calcBothFDRs() {
 
 	i = 0;
 	for(curScore = realDeq.begin(); curScore != realDeq.end(); curScore++) {
+		tmp_score = curScore->deltaScore;
+		if(tmp_score < 0.5) tmp_score = 0.5;		
 		// local FDR
 		ratio = 0;
-		AUC_rev_0 = getLocalAUC(curScore->deltaScore, 0);
-		AUC_rev_1 = getLocalAUC(curScore->deltaScore, 1);
+		AUC_rev_0 = getLocalAUC(tmp_score, 0);
+		AUC_rev_1 = getLocalAUC(tmp_score, 1);
 
 		ratio = ( ((double)Ndecoy) / ((double)Nreal) ) * ( AUC_rev_0 / AUC_rev_1 );
 		localFDR.at( i ) = ratio;
@@ -203,8 +210,8 @@ void FLRClass::calcBothFDRs() {
 
 		// GLOBAL FDR
 		ratio = 0;
-		AUC_rev_0 = getGlobalAUC(curScore->deltaScore, 0);
-		AUC_rev_1 = getGlobalAUC(curScore->deltaScore, 1);
+		AUC_rev_0 = getGlobalAUC(tmp_score, 0);
+		AUC_rev_1 = getGlobalAUC(tmp_score, 1);
 
 		ratio = ( ((double)Ndecoy) / ((double)Nreal) ) * ( AUC_rev_0 / AUC_rev_1 );
 		globalFDR.at( i ) = ratio;
@@ -219,6 +226,7 @@ void FLRClass::calcBothFDRs() {
 
 // Function computes the area under the curve (AUC) for the bin that contains the passed score
 double FLRClass::getLocalAUC(double x, int whichF) {
+
 	deque<double> *Fptr = NULL;
 
 	if(whichF == 0) Fptr = &f0;
@@ -266,6 +274,7 @@ double FLRClass::getLocalAUC(double x, int whichF) {
 // This function is identical to getLocalAUC except that it computes the area before and after
 // the bin contianing x
 double FLRClass::getGlobalAUC(double x, int whichF) {
+
 	deque<double> *Fptr = NULL;
 
 	if(whichF == 0) Fptr = &f0;
