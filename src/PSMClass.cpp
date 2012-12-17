@@ -216,7 +216,7 @@ void PSMClass::recordSpectrum(SpecStruct spec) {
 
 	delete(all_intensities); all_intensities = NULL;
 
-	if(g_IS_HCD) deisotopeSpectrum();
+	//if(g_IS_HCD) deisotopeSpectrum();
 
 	normalizeSpectrum(); // scale spectrum to be in the range of 0-100
 	//reduceNeutralLossPeak(); // now that you normalized the spectrum, reduce the impact of the NL peak
