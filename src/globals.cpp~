@@ -90,7 +90,7 @@ void print_usage() {
 		 << "\nOptional parameters\n"
 		 << "   -p <0.0-1.0>              min. Peptide probability threshold (default is " << g_prob_threshold << ")\n"
 		 << "   -m <0.0-1.0>              min. Peptide probability to use for parameter estimations (default is " << g_model_prob << ")\n"
-		 << "   -e <mzML, mzXML>		  File extension used for reading spectral data files (default is mzXML)\n"
+		 << "   -e <mzML, mzXML>     File extension used for reading spectral data files (default is mzXML)\n"
 		 << "   -f                        \"The Full Monty\": Report scores for all spectra not just representative ones\n"
 		 //<< "   -s                        Represent modified residues by a single character (usually the AA letter in lower case)\n"
 		 << "   -A / --Ascore             Run Gygi's Ascore algorithm instead (m/z window fixed at 0.5 for this)\n"
@@ -109,7 +109,7 @@ void print_usage() {
 		 << "                             2 = use neutral loss peaks ONLY for model parameter acquisition\n"
 		 << "                             3 = use them only in final scoring of phospho-peptides (ie: not for model parameter acquisition)\n\n"
 
-		 << "   -t <1,2>                  Tells me to write the spectra to disk with each assigned peak annotated\n"
+		 << "   -t <1,2>                Tells me to write the spectra to disk with each assigned peak annotated\n"
 		 << "                             1 = raw spectrum, 2 = scaled intensities (0-100)\n" //3 = log(quantile normalized intensities)\n"
 		 << "   -b                        When writing spectra to disk, write *BOTH* luciphor peptide predictions to disk\n\n"
 
