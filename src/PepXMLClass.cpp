@@ -236,6 +236,15 @@ void PepXMLClass::parsePepXMLfile() {
 		exit(-1);
 	}
 
+	if(numPSMs_forModeling < g_MIN_MODEL_NUM) {
+		cerr << "\nERROR!: I was unable to find at least " << g_MIN_MODEL_NUM
+			 << " PSMs with a score >= " << g_model_prob << endl
+			 << "If you want to analyze the data in '" 
+			 << g_srcXMLfile.substr(g_srcXMLfile.find_last_of("/")+1) << "' " 
+			 << "you must lower your modeling threshold.\nExiting now...\n\n";
+		exit(-1);
+	}
+
 
 	cerr << numPSM << " phospho-peptides read in... (Score >= " << g_prob_threshold << ")\n\n";
 }
@@ -458,7 +467,6 @@ void PepXMLClass::acquireModelParameters() {
 	modelParamStruct *curParams = NULL;
 
 
-	const int MIN_PSM_COUNT = 10; // minimum number of spectra you need to have data for to score
 	double meanM_b, meanM_y, varM_b, varM_y, meanU, varU;
 	double meanMd_b, meanMd_y, varMd_b, varMd_y, meanUd, varUd;
 	double mz_err_tol;
@@ -567,7 +575,7 @@ void PepXMLClass::acquireModelParameters() {
 		}
 ***************/
 
-		if(zN >= MIN_PSM_COUNT) { // record modeling parameters only if you have data for the current charge state
+		if(zN >= g_MIN_MODEL_NUM) { // record modeling parameters only if you have data for the current charge state
 
 			// prune intensity distributions to remove extreme outliers
 			double percentile_trim = 0.1;
@@ -726,7 +734,6 @@ void PepXMLClass::acquireModelParameters_HCD() {
 	list<double> *ptr  = NULL;
 	list<double>::iterator L;
 	modelParamStruct *curParams = NULL;
-	const int MIN_PSM_COUNT = 50;
 	PSMClass *decoyPSM = NULL;
 
 
@@ -747,7 +754,6 @@ void PepXMLClass::acquireModelParameters_HCD() {
 	// and collect the intensities of the classified peaks.
 	// We will only use spectra with a probability >= modelProb
 	// to compute the model parameters.
-	//N = (signed) modelData.size();
 	i = 0;
 	cerr << "\nAcquiring model parameters from " << numPSMs_forModeling << " spectra with Score >= "
 		 << g_model_prob << endl;
@@ -884,7 +890,7 @@ void PepXMLClass::acquireModelParameters_HCD() {
 //	}
 
 
-	if(zN >= MIN_PSM_COUNT) { // record modeling parameters only if you have data for the current charge state
+	if(zN >= g_MIN_MODEL_NUM) { // record modeling parameters only if you have data for the current charge state
 
 		// prune intensity distributions to remove extreme outliers
 		double percentile_trim = 0.1;

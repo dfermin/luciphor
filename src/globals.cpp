@@ -60,7 +60,7 @@ double g_NUM_PERMS_LIMIT = pow(2.0, 14); // maximum number of permutations to co
 int g_NUM_THREADS = 1;
 int g_intensityType = 2;
 int g_CHARGE_STATE = 0;
-
+int g_MIN_MODEL_NUM = 10;
 
 map<char, char> decoyAA;
 map<char, double> AAmass;
@@ -370,6 +370,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 	if(g_IS_HCD) {
 		cerr << "\tRunning high-mass accuracy algorithm\n";
 		MIN_MZ = 100.0; // we can go pretty low in the m/z scale with HCD data
+		g_MIN_MODEL_NUM = 50; // since we don't separate based on charge state, we need to increase this
 	}
 
 	if(g_NO_NL_PEAKS) {
