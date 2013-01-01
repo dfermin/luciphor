@@ -100,7 +100,6 @@ PSMClass::PSMClass(matchDataStruct *ptr) {
 	is_valid_phosphoPSM = false;
 
 
-	//if( (phosphoCtr > 0) && (STYCtr > 1) && (phosphoDelta > 0) ) { // this is a keeper
 	if( (phosphoCtr > 0) && (STYCtr > 0) ) { // this is a keeper
 		specId = ptr->specId;
 		peptide = ptr->peptide;
@@ -117,18 +116,18 @@ PSMClass::PSMClass(matchDataStruct *ptr) {
 
 		is_valid_phosphoPSM = true;
 		if(iniProb >= g_model_prob) use_for_model = true;
+
+		// This means all potential phosphorylation sites are phosphorylated in the peptide
+		// there is no actual need to run luciphor on these cases but we score them anyways
+		if( (phosphoCtr == STYCtr) ) {
+			is_unambiguous = true;
+			numPermutations = 1;
+
+		}
+		else numPermutations = combinatorial(numPotentialSites, numPhosphoSites);
+
+		if(g_randDecoyAA) calcNumDecoyPermutations(); // record decoy permutation count
 	}
-
-	// This means all potential phosphorylation sites are phosphorylated in the peptide
-	// there is no actual need to run luciphor on these cases but we score them anyways
-	if( (phosphoCtr == STYCtr) ) {
-		is_unambiguous = true;
-		numPermutations = 1;
-
-	}
-	else numPermutations = combinatorial(numPotentialSites, numPhosphoSites);
-
-	if(g_randDecoyAA) calcNumDecoyPermutations(); // record decoy permutation count
 }
 
 

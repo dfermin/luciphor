@@ -75,7 +75,8 @@ void PepXMLClass::parsePepXMLfile() {
 	boost::regex search_hit_regex("^.*<search_hit hit_rank.* peptide=\"(\\w+)\" peptide_prev_aa.* calc_neutral_pep_mass=\"([^\"]+)\".*");
 	boost::regex modification_mass_regex("^.*<mod_aminoacid_mass position=\"(\\d+)\" mass=\"([^\"]+)\".*");
 	boost::regex nterm_mod_regex("^.*<modification_info mod_nterm_mass=\"([^\"]+)\".*");
-	boost::regex end_spectrum_query("^.*</spectrum_query>.*");
+	//boost::regex end_spectrum_query("^.*</spectrum_query>.*");
+	boost::regex end_spectrum_query("^.*</search_hit>.*");
 
 	// depending upon what the user chooses as a PSM selection criterion, the scoring_regex_ptr
 	// is set to point to the right regex pattern
@@ -207,11 +208,11 @@ void PepXMLClass::parsePepXMLfile() {
 
 					curPSM = new PSMClass(mds);
 
-					if(curPSM->isKeeper()) {
-						PSMvec->push_back(*curPSM);
-					}
+					if(curPSM->isKeeper()) PSMvec->push_back(*curPSM);
+
 					// we'll use this spectrum for estimating the model parameters
 					if(curPSM->useForModeling()) numPSMs_forModeling++;
+
 				}
 			}
 
