@@ -1219,11 +1219,6 @@ void PSMClass::runAscore() {
 	afs.seqBest = "";
 
 
-
-//	if(g_DEBUG_MODE) {
-//		if(specId.compare("Pepmix1_HCD.1499.1499.2") != 0) return;
-//	}
-
 	// store the relevant peak type into a new map that is passed to the curMSProduct object
 	spectrum = new map<double, double>;
 	for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {

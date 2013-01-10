@@ -790,6 +790,31 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 
 	N = (signed)Mpeaks->size();
 
+	if(g_DEBUG_MODE) {
+		// check to see if the debug file already exists, if so, open it for
+		// appending. Otherwise, create it.
+		if( fileExists("ionScores.debug") ) {
+			debug_ionScores.open("ionScores.debug", ios::out | ios::app);
+		}
+		else { // create file
+			debug_ionScores.open("ionScores.debug", ios::out);
+			debug_ionScores << "specId\t"
+							<< "ionSeq\t"
+							<< "mz\t"
+							<< "intensity\t"
+							<< "mzDist\t"
+							<< "intense_wt\t"
+							<< "log_ints_M\t"
+							<< "log_ints_U\t"
+							<< "log_dist_M\t"
+							<< "log_dist_U\t"
+							<< "Iscore\t"
+							<< "Dscore\n";
+		}
+	}
+
+
+
 	if(N == 0) score = 0.0; // the spectrum has no matched peaks
 	else {
 
@@ -852,8 +877,30 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 			}
 
 			score += x;
+
+			/***************************************************/
+			/***************************************************/
+			/*  This is where we print out scores for each ion */
+			/***************************************************/
+			/***************************************************/
+			if(g_DEBUG_MODE) {
+				debug_ionScores << specId << "\t"
+								<< ionSeq << "\t"
+								<< mz << "\t"
+								<< intensity << "\t"
+								<< mzDist << "\t"
+								<< intense_wt << "\t"
+								<< log_prob_M << "\t"
+								<< log_prob_U <<  "\t"
+								<< log_dist_M << "\t"
+								<< log_dist_U << "\t"
+								<< Iscore << "\t"
+								<< Dscore << endl;
+			}
 		}
 	}
+
+	if(g_DEBUG_MODE) debug_ionScores.close();
 
 	if(score < 0) score = 0;
 	return score;
@@ -887,7 +934,7 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 		// check to see if the debug file already exists, if so, open it for
 		// appending. Otherwise, create it.
 		if( fileExists("ionScores.debug") ) {
-			debug_ionScores.open("ionScores.debug", ios::app);
+			debug_ionScores.open("ionScores.debug", ios::out | ios::app);
 		}
 		else { // create file
 			debug_ionScores.open("ionScores.debug", ios::out);
@@ -896,6 +943,7 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 							<< "mz\t"
 							<< "intensity\t"
 							<< "mzDist\t"
+							<< "intense_wt\t"
 							<< "log_ints_M\t"
 							<< "log_ints_U\t"
 							<< "log_dist_M\t"
@@ -982,6 +1030,7 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 								<< mz << "\t"
 								<< intensity << "\t"
 								<< mzDist << "\t"
+								<< intense_wt << "\t"
 								<< log_int_M << "\t"
 								<< log_int_U <<  "\t"
 								<< log_dist_M << "\t"
