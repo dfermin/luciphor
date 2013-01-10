@@ -82,14 +82,14 @@ double getLogNPdensityInt_b(double x, modelParamStruct *paramPtr) {
 		a = paramPtr->tickMarks_int_b.at(i);
 		b = paramPtr->tickMarks_int_b.at(j);
 
-		if(xx >= a) {
+		if(xx >= a && xx < b) {
 			// We have reached the bin that contains 'x'
 			// Now compute the area under the curve upto the point that includes 'x'
 			tmp1 = (b-xx) / (b-a);
 			tmp2 = (xx-a) / (b-a);
 
 			fx = (tmp1 * paramPtr->f_int_b.at(i)) + (tmp2 * paramPtr->f_int_b.at(j));
-			sum += fx;
+			sum = fx;
 			break; // leave loop since you are done
 		}
 	}
@@ -124,14 +124,14 @@ double getLogNPdensityInt_y(double x, modelParamStruct *paramPtr) {
 		a = paramPtr->tickMarks_int_y.at(i);
 		b = paramPtr->tickMarks_int_y.at(j);
 
-		if(xx >= a) {
+		if(xx >= a && xx < b) {
 			// We have reached the bin that contains 'x'
 			// Now compute the area under the curve upto the point that includes 'x'
 			tmp1 = (b-xx) / (b-a);
 			tmp2 = (xx-a) / (b-a);
 
 			fx = (tmp1 * paramPtr->f_int_y.at(i)) + (tmp2 * paramPtr->f_int_y.at(j));
-			sum += fx;
+			sum = fx;
 			break; // leave loop since you are done
 		}
 	}
@@ -165,14 +165,14 @@ double getLogNPdensityInt_U(double x, modelParamStruct *paramPtr) {
 		a = paramPtr->tickMarks_int_U.at(i);
 		b = paramPtr->tickMarks_int_U.at(j);
 
-		if(xx >= a) {
+		if(xx >= a && xx < b) {
 			// We have reached the bin that contains 'x'
 			// Now compute the area under the curve upto the point that includes 'x'
 			tmp1 = (b-xx) / (b-a);
 			tmp2 = (xx-a) / (b-a);
 
 			fx = (tmp1 * paramPtr->f_int_U.at(i)) + (tmp2 * paramPtr->f_int_U.at(j));
-			sum += fx;
+			sum = fx;
 			break; // leave loop since you are done
 		}
 	}
@@ -207,14 +207,14 @@ double getLogNPdensityDist(double x, modelParamStruct *paramPtr) {
 		a = paramPtr->tickMarks_dist.at(i);
 		b = paramPtr->tickMarks_dist.at(j);
 
-		if(xx >= a) {
+		if(xx >= a && xx < b) {
 			// We have reached the bin that contains 'x'
 			// Now compute the area under the curve upto the point that includes 'x'
 			tmp1 = (b-xx) / (b-a);
 			tmp2 = (xx-a) / (b-a);
 
 			fx = (tmp1 * paramPtr->f_dist.at(i)) + (tmp2 * paramPtr->f_dist.at(j));
-			sum += fx;
+			sum = fx;
 			break; // leave loop since you are done
 		}
 	}
@@ -248,14 +248,14 @@ double getLogNPdensityDist_U(double x, modelParamStruct *paramPtr) {
 		a = paramPtr->tickMarks_dist_U.at(i);
 		b = paramPtr->tickMarks_dist_U.at(j);
 
-		if(xx >= a) {
+		if(xx >= a && xx < b) {
 			// We have reached the bin that contains 'x'
 			// Now compute the area under the curve upto the point that includes 'x'
 			tmp1 = (b-xx) / (b-a);
 			tmp2 = (xx-a) / (b-a);
 
 			fx = (tmp1 * paramPtr->f_dist_U.at(i)) + (tmp2 * paramPtr->f_dist_U.at(j));
-			sum += fx;
+			sum = fx;
 			break; // leave loop since you are done
 		}
 	}
@@ -330,17 +330,15 @@ void estimateNonparamDist(list<double> *ptr, modelParamStruct *paramPtr, double 
 
 	for(list<double>::iterator L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
 
-	int ntick = 2000; // interval is from -mz_err to mz_err
+	int ntick = 1000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
 	paramPtr->ntick_dist = ntick;
-	/* double min_dist = -mz_err - 0.001;
-	double max_dist = mz_err + 0.001; */
 	double min_dist = -0.5;
 	double max_dist = 0.5;
 	paramPtr->tickMarks_dist.resize(paramPtr->ntick_dist);
 	int ii = 0;
 	for(tic = paramPtr->tickMarks_dist.begin(); tic != paramPtr->tickMarks_dist.end(); tic++) {
-		paramPtr->tickMarks_dist.at(ii) = min_dist + ii * (max_dist - min_dist) / ((double) (paramPtr->ntick_dist-1));
+		paramPtr->tickMarks_dist.at(ii) = min_dist + ((double) ii) * (max_dist - min_dist) / ((double) (paramPtr->ntick_dist-1));
 		ii++;
 	}
 
@@ -381,17 +379,15 @@ void estimateNonparamDist_U(list<double> *ptr, modelParamStruct *paramPtr, doubl
 
 	for(list<double>::iterator L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
 
-	int ntick = 2000; // interval is from -mz_err to mz_err
+	int ntick = 1000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
 	paramPtr->ntick_dist = ntick;
-	// double min_dist = -mz_err - 0.001;
-	// double max_dist = mz_err + 0.001;
 	double min_dist = -0.5;
 	double max_dist = 0.5;
 	paramPtr->tickMarks_dist_U.resize(paramPtr->ntick_dist);
 	int ii = 0;
 	for(tic = paramPtr->tickMarks_dist_U.begin(); tic != paramPtr->tickMarks_dist_U.end(); tic++) {
-		paramPtr->tickMarks_dist_U.at(ii) = min_dist + ii * (max_dist - min_dist) / ((double) (paramPtr->ntick_dist-1));
+		paramPtr->tickMarks_dist_U.at(ii) = min_dist + ((double) ii) * (max_dist - min_dist) / ((double) (paramPtr->ntick_dist-1));
 		ii++;
 	}
 
@@ -458,10 +454,13 @@ void estimateNonparamInt_b(list<double> *ptr, modelParamStruct *paramPtr, double
 		else { }
 	}	
 
+	min_int = -2.0;
+	max_int = 8.0;
+
 	paramPtr->tickMarks_int_b.resize(paramPtr->ntick_int);
 	int ii = 0;
 	for(tic = paramPtr->tickMarks_int_b.begin(); tic != paramPtr->tickMarks_int_b.end(); tic++) {
-		paramPtr->tickMarks_int_b.at(ii) = min_int + ii * (max_int - min_int) / ((double) (paramPtr->ntick_int-1));
+		paramPtr->tickMarks_int_b.at(ii) = min_int + ((double) ii) * (max_int - min_int) / ((double) (paramPtr->ntick_int-1));
 		ii++;
 	}
 
@@ -515,10 +514,13 @@ void estimateNonparamInt_y(list<double> *ptr, modelParamStruct *paramPtr, double
 		else { }
 	}	
 
+	min_int = -2.0;
+	max_int = 8.0;
+
 	paramPtr->tickMarks_int_y.resize(paramPtr->ntick_int);
 	int ii = 0;
 	for(tic = paramPtr->tickMarks_int_y.begin(); tic != paramPtr->tickMarks_int_y.end(); tic++) {
-		paramPtr->tickMarks_int_y.at(ii) = min_int + ii * (max_int - min_int) / ((double) (paramPtr->ntick_int-1));
+		paramPtr->tickMarks_int_y.at(ii) = min_int + ((double) ii) * (max_int - min_int) / ((double) (paramPtr->ntick_int-1));
 		ii++;
 	}
 
@@ -575,10 +577,13 @@ void estimateNonparamInt_U(list<double> *ptr, modelParamStruct *paramPtr, double
 		else { }
 	}	
 
+	min_int = -2.0;
+	max_int = 8.0;
+
 	paramPtr->tickMarks_int_U.resize(paramPtr->ntick_int);
 	int ii = 0;
 	for(tic = paramPtr->tickMarks_int_U.begin(); tic != paramPtr->tickMarks_int_U.end(); tic++) {
-		paramPtr->tickMarks_int_U.at(ii) = min_int + ii * (max_int - min_int) / ((double) (paramPtr->ntick_int-1));
+		paramPtr->tickMarks_int_U.at(ii) = min_int + ((double) ii) * (max_int - min_int) / ((double) (paramPtr->ntick_int-1));
 		ii++;
 	}
 
@@ -599,9 +604,7 @@ void estimateNonparamInt_U(list<double> *ptr, modelParamStruct *paramPtr, double
 	jj = 0;
 	// iterate over real observations
 	for(curScore = X->begin(); curScore != X->end(); curScore++) {
-		if(fabs(*curScore) <= mz_err) {
 			jj++;
-		}
 	}
 	nmatched = jj;
 
@@ -610,9 +613,7 @@ void estimateNonparamInt_U(list<double> *ptr, modelParamStruct *paramPtr, double
 		tmp_sum = 0;
 		// iterate over real observations
 		for(curScore = X->begin(); curScore != X->end(); curScore++) {
-			if(fabs(*curScore) <= mz_err) {
 				tmp_sum += normalDensity( *tic, *curScore, paramPtr->bw_int_U );
-			}
 		}
 		tmp_sum /= ( ((double) nmatched) * paramPtr->bw_int_U ) ;	
 
