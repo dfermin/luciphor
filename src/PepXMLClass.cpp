@@ -75,7 +75,6 @@ void PepXMLClass::parsePepXMLfile() {
 	boost::regex search_hit_regex("^.*<search_hit hit_rank.* peptide=\"(\\w+)\" peptide_prev_aa.* calc_neutral_pep_mass=\"([^\"]+)\".*");
 	boost::regex modification_mass_regex("^.*<mod_aminoacid_mass position=\"(\\d+)\" mass=\"([^\"]+)\".*");
 	boost::regex nterm_mod_regex("^.*<modification_info mod_nterm_mass=\"([^\"]+)\".*");
-	//boost::regex end_spectrum_query("^.*</spectrum_query>.*");
 	boost::regex end_spectrum_query("^.*</search_hit>.*");
 
 	// depending upon what the user chooses as a PSM selection criterion, the scoring_regex_ptr
@@ -546,43 +545,13 @@ void PepXMLClass::acquireModelParameters() {
 
 		}
 
-/************
-		// Collect unmatched peak parameters. For HCD data we only use
-		// the intensity data
-		for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-
-			if(curPSM->getCharge() != curChargeState) continue;
-			if( !curPSM->useForModeling() ) continue;
-
-			TP.schedule( boost::bind(&PSMClass::threaded_recordModelingParameters_UNmatched, boost::ref(*curPSM) ));
-		}
-		TP.wait(); // wait for all the threads to end
-
-
-		// record the unmatched distances and intensities
-		for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-
-			if(curPSM->getCharge() != curChargeState) continue;
-			if( !curPSM->useForModeling() ) continue;
-
-			// Unmatched peak intensities
-			ptr = curPSM->getParamList('u', 'u', 'i');
-			for(L = ptr->begin(); L != ptr->end(); L++)
-				if( !isInfinite(*L) && !dbl_isnan(*L) ) U_ints.push_back(*L);
-
-			ptr = curPSM->getParamList('u', 'u', 'd');
-			for(L = ptr->begin(); L != ptr->end(); L++)
-				if( !isInfinite(*L) && !dbl_isnan(*L) )  U_dist.push_back(*L);
-		}
-***************/
-
 		if(zN >= g_MIN_MODEL_NUM) { // record modeling parameters only if you have data for the current charge state
 
 			// prune intensity distributions to remove extreme outliers
 			double percentile_trim = 0.1;
-			pruneList(&M_ints_B, percentile_trim);
-			pruneList(&M_ints_Y, percentile_trim);
-			pruneList(&U_ints, percentile_trim);
+//			pruneList(&M_ints_B, percentile_trim);
+//			pruneList(&M_ints_Y, percentile_trim);
+//			pruneList(&U_ints, percentile_trim);
 
 
 			if(g_DEBUG_MODE) {
@@ -895,8 +864,8 @@ void PepXMLClass::acquireModelParameters_HCD() {
 
 		// prune intensity distributions to remove extreme outliers
 		double percentile_trim = 0.1;
-		pruneList(&M_ints, percentile_trim);
-		pruneList(&U_ints, percentile_trim);
+//		pruneList(&M_ints, percentile_trim);
+//		pruneList(&U_ints, percentile_trim);
 
 		if(g_DEBUG_MODE) {
 			// Debug function that prints out the values used for modeling.
@@ -997,7 +966,11 @@ void PepXMLClass::acquireModelParameters_HCD() {
 // This function does the final scoring
 void PepXMLClass::scoreSpectra() {
 
-	cerr << "\nScoring " << PSMvec->size() << " phospho spectra...\n";
+	if(g_scoreSelect) {
+		cerr << "\nScoring " << g_PSMscoreSet.size() << " phospho spectra...\n";
+	}
+	else  cerr << "\nScoring " << PSMvec->size() << " phospho spectra...\n";
+
 	deque<PSMClass>::iterator curPSM;
 
 	g_progressCtr = 0;
@@ -1010,14 +983,17 @@ void PepXMLClass::scoreSpectra() {
 	cerr << "Scoring...  ";
 	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
 
+		if(g_scoreSelect) { // consider only PSMs in user list
+			set<string>::iterator s;
+			s = g_PSMscoreSet.find(curPSM->getSpecId());
+			if(s == g_PSMscoreSet.end()) continue;
+		}
+
 		TP.schedule(boost::bind( &PSMClass::threaded_scorePSM, boost::ref(*curPSM) ));
 	}
 	TP.wait(); // wait for all jobs in threadpool queue to finish.
 
 	cerr << "Done.\n\n";
-
-	// consolidate spectra that match to the same phospho peptide sequence
-	//if( !g_FULL_MONTY ) consolidateSpectra();
 
 }
 
@@ -1060,6 +1036,9 @@ void PepXMLClass::writeLuciphorResults() {
 			 << "delta_score\t"
 			 << "Luciphor_Score_1\t"
 			 << "Luciphor_Score_2\t"
+
+			// << "NL_prob\t"
+
 			 << "isDecoy1\t"
 			 << "isDecoy2\t"
 			 << "totalNumPeaks\t"
@@ -1099,6 +1078,12 @@ void PepXMLClass::writeLuciphorResults() {
 
 	cerr << "Writing results to disk... ";
 	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+
+		if(g_scoreSelect) { // consider only PSMs in user list
+			set<string>::iterator s;
+			s = g_PSMscoreSet.find(curPSM->getSpecId());
+			if(s == g_PSMscoreSet.end()) continue;
+		}
 
 		if(g_writeDTA) curPSM->writeSpectrumToDisk();
 
@@ -1246,6 +1231,13 @@ void PepXMLClass::process_with_Ascore() {
 
 	cerr << "\nRunning Ascore... ";
 	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+
+		if(g_scoreSelect) { // consider only PSMs in user list
+			set<string>::iterator s;
+			s = g_PSMscoreSet.find(curPSM->getSpecId());
+			if(s == g_PSMscoreSet.end()) continue;
+		}
+
 		curPSM->setSpectrumPtr("raw");
 		curPSM->generatePermutations();
 		//if(g_randDecoyAA) curPSM->genDecoys();
@@ -1287,6 +1279,12 @@ void PepXMLClass::process_with_Ascore() {
 		 << "numMatchedPeaks2\n";
 
 	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+
+		if(g_scoreSelect) { // consider only PSMs in user list
+			set<string>::iterator s;
+			s = g_PSMscoreSet.find(curPSM->getSpecId());
+			if(s == g_PSMscoreSet.end()) continue;
+		}
 
 		if(g_writeDTA) curPSM->writeAscoreSpectrum();
 		curPSM->write_ascore_results( outf );

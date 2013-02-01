@@ -47,11 +47,13 @@ private:
 	double luciphor_deltaScore;
 	double scoreTime;
 	double mz_err; // based upon charge state of peptide, used for peak matching
+	double NLprob; // probability score for identified neutral loss peak
 
 	// These are derived from the FLRclass
 	double localFLR;
 	double globalFLR;
 	double luciphorProb;
+
 
 	bool is_valid_phosphoPSM;
 	bool use_for_model;
@@ -92,6 +94,7 @@ public:
 
 	void recordSpectrum(SpecStruct spec);
 	void normalizeSpectrum();
+	void identifyNeutralLossPeak();
 	void identifyNoisyPeaks();
 	void writeSpectrumToDisk();
 	void generatePermutations();

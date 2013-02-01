@@ -27,6 +27,7 @@ extern string g_srcDir; // holds name of folder with the spectral files
 extern string g_ext; // holds spectrum file format (mzXML or mzML, etc..)
 extern string cmdLineArgs; // holds user-given command line arguments
 extern string g_outputName;  // holds users' chosen output tag
+extern string g_PSMfile; // holds list of PSMs that user wants scored
 extern bool g_writeDTA; // if true, user wants to write spectra to disk
 extern bool g_userDefinedOutput; // true means the user gave a name for the output file
 extern double g_prob_threshold; // min. probability a peptide must have to be parsed
@@ -43,6 +44,7 @@ extern bool g_NO_NL_PEAKS_MODEL; // true means that neutral loss fragment ions w
 extern bool g_NL_MODEL_ONLY; // true means that neutral loss peaks will only be considered for building the model
 extern bool g_runAscoreInstead; // true means the user wants to run the Ascore algorithm on the data
 extern bool g_randDecoyAA;
+extern bool g_scoreSelect;
 extern bool g_singleLetter;
 extern bool g_LIMIT_CHARGE_STATE;
 extern bool g_WRITE_TOP_TWO;
@@ -63,9 +65,11 @@ extern int g_CHARGE_STATE;
 extern int g_MIN_MODEL_NUM; // minimum number of PSMs you need for modeling
 extern map<char, string> modAAmap;
 extern map<char, char> decoyAA;
+extern set<string> g_PSMscoreSet; //set of PSMs the user wants scored
 
 // Global constants
 const double TINY_NUM = 1e-10; // represents a tiny number
+const double TINY_DEN = 1.0;
 const double BIG_NUM = 1e10; // represents a tiny number
 const double PPM = 1e-6; // parts per million
 
@@ -79,7 +83,7 @@ void initialize_AA_masses();
 void addAAmass(string AA, double mass, char isVar);
 void printProgress(string txt, int ctr, int N);
 void parse_alternative_scoring(string *scoringStr, string *modelingStr);
-
+void parsePSMfile(string srcFile);
 
 double round_dbl(double r, int places);
 double str2dbl(string ch);

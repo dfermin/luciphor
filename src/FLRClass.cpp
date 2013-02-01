@@ -600,10 +600,10 @@ flrStruct FLRClass::getFLR(string specId) {
 		// This PSM's best assignment is a decoy so we don't have FLR data for it
 		// Fill in the FLR variables with a place holder value
 		ret.deltaScore = -1000;
-		ret.globalFLR = -1000;
-		ret.localFLR = -1000;
+		ret.globalFLR = 1;
+		ret.localFLR = 1;
 		ret.isDecoy = 1;
-		ret.prob = -1000;
+		ret.prob = -1;
 	}
 	return ret;
 }

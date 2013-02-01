@@ -582,7 +582,6 @@ void MSProductClass::getMatchedPeaks(map<double, peakStruct> *Mptr) {
 				}
 
 				X = new peakStruct;
-				// X->MZdistance = mz_adjust_dist( tmpD );
 				X->MZdistance = tmpD;
 				X->intensity = intensity;
 				X->ionType = (iter == 0 ? 'b' : 'y');
@@ -798,18 +797,18 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 		}
 		else { // create file
 			debug_ionScores.open("ionScores.debug", ios::out);
-			debug_ionScores << "specId\t"
-							<< "ionSeq\t"
-							<< "mz\t"
-							<< "intensity\t"
-							<< "mzDist\t"
-							<< "intense_wt\t"
-							<< "log_ints_M\t"
-							<< "log_ints_U\t"
-							<< "log_dist_M\t"
-							<< "log_dist_U\t"
-							<< "Iscore\t"
-							<< "Dscore\n";
+			debug_ionScores << "specId" << "\t"
+							<< "ionSeq" << "\t"
+							<< "mz" << "\t"
+							<< "intensity" << "\t"
+							<< "mzDist" << "\t"
+							<< "intense_wt" << "\t"
+							<< "log_ints_M" << "\t"
+							<< "log_ints_U" << "\t"
+							<< "log_dist_M" << "\t"
+							<< "log_dist_U" << "\t"
+							<< "Iscore" << "\t"
+							<< "Dscore" << endl;
 		}
 	}
 
@@ -902,7 +901,7 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 
 	if(g_DEBUG_MODE) debug_ionScores.close();
 
-	if(score < 0) score = 0;
+	// if(score < 0) score = 0;
 	return score;
 }
 
@@ -921,6 +920,8 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 	// distance variables
 	double muM_dist, varM_dist, varM_dist_IQR, log_dist_M, log_dist_U;
 
+	double muU_dist, varU_dist;
+
 	double mz, intensity, mzDist, score, Iscore, Dscore, x;
 
 	double pi = 0.60; // fixed for this function call
@@ -938,18 +939,18 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 		}
 		else { // create file
 			debug_ionScores.open("ionScores.debug", ios::out);
-			debug_ionScores << "specId\t"
-							<< "ionSeq\t"
-							<< "mz\t"
-							<< "intensity\t"
-							<< "mzDist\t"
-							<< "intense_wt\t"
-							<< "log_ints_M\t"
-							<< "log_ints_U\t"
-							<< "log_dist_M\t"
-							<< "log_dist_U\t"
-							<< "Iscore\t"
-							<< "Dscore\n";
+			debug_ionScores << "specId" << "\t"
+							<< "ionSeq" << "\t"
+							<< "mz" << "\t"
+							<< "intensity" << "\t"
+							<< "mzDist" << "\t"
+							<< "intense_wt" << "\t"
+							<< "log_ints_M" << "\t"
+							<< "log_ints_U" << "\t"
+							<< "log_dist_M" << "\t"
+							<< "log_dist_U" << "\t"
+							<< "Iscore" << "\t"
+							<< "Dscore" << endl;
 		}
 	}
 
@@ -961,6 +962,8 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 		// so assign them here
 		muU_ints = paramPtr->unMatched_mean;
 		varU_ints = paramPtr->unMatched_var;
+		muU_dist = paramPtr->unMatched_dist_mean;
+		varU_dist = paramPtr->unMatched_dist_var;
 
 
 		score = 0.0;
@@ -994,16 +997,19 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 			// log_ints_U = log_gaussianProb(muU_ints, varU_ints, intensity);
 			// Iscore = log_ints_M - log_ints_U;
 			if(peakType == 'b') log_int_M = getLogNPdensityInt_b(intensity, paramPtr);
-			else if(peakType == 'y') log_int_M = getLogNPdensityInt_y(intensity, paramPtr);
-			else {}
+			if(peakType == 'y') log_int_M = getLogNPdensityInt_y(intensity, paramPtr);
+
 			log_int_U = getLogNPdensityInt_U(intensity, paramPtr);
 			Iscore = log_int_M - log_int_U;
 
 			/*
 			 * DISTANCE
 			 */
-			log_dist_M = getLogNPdensityDist((mzDist), paramPtr);
-			log_dist_U = getLogNPdensityDist_U((mzDist), paramPtr);
+			log_dist_M = getLogNPdensityDist(mzDist, paramPtr);
+			log_dist_U = getLogNPdensityDist_U(mzDist, paramPtr);
+			// log_dist_U = log_gaussianProb(muU_dist, varU_dist, mzDist);
+
+
 			Dscore = log_dist_M - log_dist_U;
 
 			//log_dist_M = log_mix_laplaceProb(muM_dist, pi, varM_dist_IQR, varM_dist, mzDist);
@@ -1014,9 +1020,18 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 			//if(log_dist_M < 0.5) log_dist_M = 0.5;
 
 
+			/*
+			 * Hyungwon removed the intensity component to the HCD score in this code
+			 *
 			double intense_wt = 1.0 / ( 1.0 + exp(-Iscore) );
 			if(dbl_isnan(Dscore) || isInfinite(Dscore) ) x = 0;
-			else x = intense_wt * Dscore;
+			else x = Dscore;
+			/****/
+			
+			double intense_wt = 1.0 / ( 1.0 + exp(-Iscore) );
+			if(dbl_isnan(Dscore) || isInfinite(Dscore) ) x = 0;
+			else x = Iscore + Dscore;
+
 			score += x;
 
 			/***************************************************/
@@ -1045,7 +1060,7 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 
 
 
-	if(score < 0) score = 0;
+	// if(score < 0) score = 0;
 	return score;
 }
 

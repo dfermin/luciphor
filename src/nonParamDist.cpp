@@ -325,12 +325,13 @@ double mz_adjust_dist(double x) {
 void estimateNonparamDist(list<double> *ptr, modelParamStruct *paramPtr, double mz_err) {
 
 	deque<double> *X = new deque<double>;
+	deque<double> *tmpf = new deque<double>;
 	deque<double>::iterator tic;
 	deque<double>::iterator curPeak;
 
 	for(list<double>::iterator L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
 
-	int ntick = 1000; // interval is from -mz_err to mz_err
+	int ntick = 2000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
 	paramPtr->ntick_dist = ntick;
 	double min_dist = -0.5;
@@ -346,7 +347,7 @@ void estimateNonparamDist(list<double> *ptr, modelParamStruct *paramPtr, double 
 
 	double sigma = sqrt( getVar(ptr) );   // need writing another function for variance!!
 	paramPtr->bw_dist = 1.06 * (sigma / pow(nmatched, 0.2) );
-	paramPtr->bw_dist *= 0.01;
+	paramPtr->bw_dist *= 0.1;
 	cerr << "Distance Matched NP Bandwidth: " << paramPtr->bw_dist << endl;
 
 	deque<double>::iterator curScore;
@@ -366,6 +367,7 @@ void estimateNonparamDist(list<double> *ptr, modelParamStruct *paramPtr, double 
 		paramPtr->f_dist.at(ii) = tmp_sum > TINY_NUM ? tmp_sum : TINY_NUM;
 		ii++;
 	}
+
 }
 
 
@@ -379,7 +381,7 @@ void estimateNonparamDist_U(list<double> *ptr, modelParamStruct *paramPtr, doubl
 
 	for(list<double>::iterator L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
 
-	int ntick = 1000; // interval is from -mz_err to mz_err
+	int ntick = 2000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
 	paramPtr->ntick_dist = ntick;
 	double min_dist = -0.5;
@@ -395,7 +397,6 @@ void estimateNonparamDist_U(list<double> *ptr, modelParamStruct *paramPtr, doubl
 
 	double sigma = sqrt( getVar(ptr) );   // need writing another function for variance!!
 	paramPtr->bw_dist_U = 1.06 * (sigma / pow(nmatched, 0.2) );
-	paramPtr->bw_dist_U *= 0.01;
 	cerr << "Distance Unmatched NP Bandwidth: " << paramPtr->bw_dist_U << endl;
 
 
@@ -422,10 +423,12 @@ void estimateNonparamDist_U(list<double> *ptr, modelParamStruct *paramPtr, doubl
 		tmp_sum /= ( ((double) nmatched) * paramPtr->bw_dist_U ) ;	
 
 		paramPtr->f_dist_U.at(ii) = tmp_sum > TINY_NUM ? tmp_sum : TINY_NUM;
-		paramPtr->f_dist_U.at(ii) = 2.0;
+		paramPtr->f_dist_U.at(ii) = TINY_DEN;
 		ii++;
 	}
 }
+
+
 
 
 /************************** Intensity Density Estimation ************************/
@@ -441,7 +444,7 @@ void estimateNonparamInt_b(list<double> *ptr, modelParamStruct *paramPtr, double
 
 	for(L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
 
-	int ntick = 1000; // interval is from -mz_err to mz_err
+	int ntick = 2000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
 	paramPtr->ntick_int = ntick;
 
@@ -454,7 +457,7 @@ void estimateNonparamInt_b(list<double> *ptr, modelParamStruct *paramPtr, double
 		else { }
 	}	
 
-	min_int = -2.0;
+	min_int = -3.0;
 	max_int = 8.0;
 
 	paramPtr->tickMarks_int_b.resize(paramPtr->ntick_int);
@@ -468,7 +471,7 @@ void estimateNonparamInt_b(list<double> *ptr, modelParamStruct *paramPtr, double
 
 	double sigma = sqrt( getVar(ptr) );   // need writing another function for variance!!
 	paramPtr->bw_int_b = 1.06 * (sigma / pow(nmatched, 0.2) );
-	// paramPtr->bw_int_b *= 0.1;
+	paramPtr->bw_int_b *= 0.5;
 	cerr << "b-ion Intensity Matched NP Bandwidth: " << paramPtr->bw_int_b << endl;
 
 	deque<double>::iterator curScore;
@@ -501,7 +504,7 @@ void estimateNonparamInt_y(list<double> *ptr, modelParamStruct *paramPtr, double
 
 	for(L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
 
-	int ntick = 1000; // interval is from -mz_err to mz_err
+	int ntick = 2000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
 	paramPtr->ntick_int = ntick;
 
@@ -514,7 +517,7 @@ void estimateNonparamInt_y(list<double> *ptr, modelParamStruct *paramPtr, double
 		else { }
 	}	
 
-	min_int = -2.0;
+	min_int = -3.0;
 	max_int = 8.0;
 
 	paramPtr->tickMarks_int_y.resize(paramPtr->ntick_int);
@@ -528,7 +531,7 @@ void estimateNonparamInt_y(list<double> *ptr, modelParamStruct *paramPtr, double
 
 	double sigma = sqrt( getVar(ptr) );   // need writing another function for variance!!
 	paramPtr->bw_int_y = 1.06 * (sigma / pow(nmatched, 0.2) );
-	// paramPtr->bw_int_y *= 0.1;
+	paramPtr->bw_int_y *= 0.5;
 	cerr << "y-ion Intensity Matched NP Bandwidth: " << paramPtr->bw_int_y << endl;
 
 	deque<double>::iterator curScore;
@@ -562,7 +565,7 @@ void estimateNonparamInt_U(list<double> *ptr, modelParamStruct *paramPtr, double
 
 	for(L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
 
-	int ntick = 1000; // interval is from -mz_err to mz_err
+	int ntick = 2000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
 	paramPtr->ntick_int = ntick;
 	// double min_dist = -mz_err - 0.001;
@@ -577,7 +580,7 @@ void estimateNonparamInt_U(list<double> *ptr, modelParamStruct *paramPtr, double
 		else { }
 	}	
 
-	min_int = -2.0;
+	min_int = -3.0;
 	max_int = 8.0;
 
 	paramPtr->tickMarks_int_U.resize(paramPtr->ntick_int);
@@ -591,7 +594,7 @@ void estimateNonparamInt_U(list<double> *ptr, modelParamStruct *paramPtr, double
 
 	double sigma = sqrt( getVar(ptr) );   // need writing another function for variance!!
 	paramPtr->bw_int_U = 1.06 * (sigma / pow(nmatched, 0.2) );
-	// paramPtr->bw_int_U *= 0.1;
+	paramPtr->bw_int_U *= 0.5;
 	cerr << "Intensity Unmatched NP Bandwidth: " << paramPtr->bw_int_U << endl;
 
 

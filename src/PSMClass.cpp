@@ -45,6 +45,7 @@ PSMClass::PSMClass(matchDataStruct *ptr) {
 
 	is_unambiguous = false;
 	use_for_model = false;
+	NLprob = 0;
 	numPhosphoSites = 0;
 	numSupportingSpectra = 0;
 	nterm_mass = 0.0;
@@ -218,6 +219,7 @@ void PSMClass::recordSpectrum(SpecStruct spec) {
 	//if(g_IS_HCD) deisotopeSpectrum();
 
 	normalizeSpectrum(); // scale spectrum to be in the range of 0-100
+	identifyNeutralLossPeak(); // determine if this spectrum has a neutral loss peak
 	//reduceNeutralLossPeak(); // now that you normalized the spectrum, reduce the impact of the NL peak
 	medianNormalizeIntensities(); // divide the intensities by their median value
 }
@@ -287,6 +289,71 @@ void PSMClass::medianNormalizeIntensities() {
 	}
 }
 
+
+
+// Function determines if the spectrum contains a neutral loss peak.
+void PSMClass::identifyNeutralLossPeak() {
+	map<double, vector<double> >::iterator curPeak;
+	list<double> NL_peaks, all_peaks;
+
+	double mz, intensity;
+	double NL_mass, NL_mz;
+	double a, b;
+
+	NL_mass = mass - 97.976895;
+	NL_mz = NL_mass / (double) charge;
+	a = NL_mz - mz_err;
+	b = NL_mz + mz_err;
+
+	// first determine if the peptide contains an Serine to loose a
+	// neutral loss. If it doesn't just leave the function
+	size_t found = peptide.find("S");
+	if(found != string::npos) {
+
+		for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
+			mz = curPeak->first;
+			intensity = curPeak->second.at(1); // 0-100 scaled intensities
+			all_peaks.push_back(intensity);
+
+			// candidate neutral loss peak
+			if( (mz >= a) && (mz <= b) ) NL_peaks.push_back(intensity);
+		}
+
+		// there is at least 1 peak that might be a neutral loss peak
+		if( !NL_peaks.empty() ) {
+
+			NL_peaks.sort(); NL_peaks.reverse(); // sorted high-to-low
+			all_peaks.sort(); all_peaks.reverse(); // sorted high-to-low
+
+			deque<double> candScores;
+			list<double>::iterator L, L2;
+			double N = (signed) all_peaks.size();
+			double score = 0;
+
+			for(L = NL_peaks.begin(); L != NL_peaks.end(); L++) {
+				double i = 0;
+				for(L2 = all_peaks.begin(); L2 != all_peaks.end(); L2++) {
+
+					if( *L == *L2 ) { // found index of the current neutral loss peak
+						score = (N - i) / N;
+						candScores.push_back(score);
+						if(g_DEBUG_MODE) {
+							cerr << specId << "  index="<< i << "\tN="<< N
+								 << "\tintensity=" << *L << " \tscore=" << score << endl;
+						}
+					}
+					i++;
+				}
+			}
+
+			// if any of the values in candScores is > 90% (0.9) then there is a good chance
+			// that there is a neutral loss in this spectrum
+			for(int j = 0; j < (signed) candScores.size(); j++) {
+				if( candScores.at(j) > NLprob ) NLprob = candScores.at(j);
+			}
+		} // end if( !NL_peaks.empty() )
+	}
+}
 
 
 
@@ -655,7 +722,13 @@ void PSMClass::classifyPeaks() {
 	for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
 		mz = curPeak->first;
 		intensity = curPeak->second.at(peakType);
-		spectrum->insert( pair<double, double>(mz, intensity) );
+
+		// if the data is HCD data, keep/use all peaks regardless of intensity
+		if(g_IS_HCD) spectrum->insert( pair<double, double>(mz, intensity) );
+		else {
+			// for CID data, retain only peak whose median normalized values are > 0 in log scale
+			if(intensity > 0) spectrum->insert( pair<double, double>(mz, intensity) );
+		}
 	}
 
 	for(curPermutation = phosphoVersionSet.begin(); curPermutation != phosphoVersionSet.end(); curPermutation++) {
@@ -1060,15 +1133,15 @@ void PSMClass::write_results(ofstream &outf) {
 
 		string tmp;
 		if(nterm_mass > 0.0) { // nterminal modification is present
-			tmp = "n[" + origModPeptide;
+			tmp = "n_" + origModPeptide;
 			origModPeptide = tmp;
 			tmp.clear();
 
-			tmp = "n[" + bestScore_final.seq;
+			tmp = "n_" + bestScore_final.seq;
 			bestScore_final.seq = tmp;
 			tmp.clear();
 
-			tmp = "n[" + nextBestScore_final.seq;
+			tmp = "n_" + nextBestScore_final.seq;
 			nextBestScore_final.seq = tmp;
 			tmp.clear();
 		}
@@ -1093,6 +1166,9 @@ void PSMClass::write_results(ofstream &outf) {
 			outf << delta_score << "\t"
 				 << bestScore_final.score << "\t"
 				 << nextBestScore_final.score << "\t"
+
+				// << NLprob << "\t" // report neutral loss probability
+
 				 << isDecoy1 << "\t"
 				 << isDecoy2 << "\t"
 				 << N << "\t"
@@ -1408,16 +1484,16 @@ void PSMClass::write_ascore_results(ofstream &outf) {
 	if(afs.nextSeq.length() == 0) afs.nextSeq = afs.seqBest;
 
 	if(nterm_mass > 0.0) { // nterminal modification is pressent
-		tmp = "n[" + origModPeptide;
+		tmp = "n_" + origModPeptide;
 		origModPeptide = tmp;
 		tmp.clear();
 
-		tmp = "n[" + afs.seqBest;
+		tmp = "n_" + afs.seqBest;
 		afs.seqBest = tmp;
 		tmp.clear();
 
 		if(afs.nextSeq.length() > 0) {
-			tmp = "n[" + afs.nextSeq;
+			tmp = "n_" + afs.nextSeq;
 			afs.nextSeq = tmp;
 			tmp.clear();
 		}
@@ -1732,9 +1808,9 @@ flrStruct PSMClass::getFLRdata() {
 	ret.specId = specId;
 	ret.deltaScore = deltaScore;
 	ret.isDecoy = isDecoyPep( &bestScore_final.seq );
-	ret.globalFLR = -1000;
-	ret.localFLR = -1000;
-	ret.prob = -1000;
+	ret.globalFLR = 1;
+	ret.localFLR = 1;
+	ret.prob = 0;
 	return ret;
 }
 

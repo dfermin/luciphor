@@ -51,11 +51,13 @@ bool g_useOnlySiteDetermIons = false;
 bool g_usePPM = false;
 
 double MIN_MZ = 100.0; // lowest m/z value we'll consider
-double g_MZ_ERR = 1.0;
+double g_MZ_ERR = 0.5;
 double g_prob_threshold = 0.05;
 double g_model_prob = 0.95;
 double g_NUM_PERMS_LIMIT = pow(2.0, 14); // maximum number of permutations to consider
 
+set<string> g_PSMscoreSet;
+bool g_scoreSelect = false;
 
 int g_NUM_THREADS = 1;
 int g_intensityType = 2;
@@ -77,7 +79,8 @@ static const struct option longOpts[] = {
 		{ "hcd", no_argument, NULL, 0 },
 		{ "siteDetermIons", no_argument, NULL, 0 },
         { "ppm", no_argument, NULL, 0 },
-		{ "debug", no_argument, NULL, 0 }
+		{ "debug", no_argument, NULL, 0 },
+		{ "Sl", required_argument, NULL, 0 }
 };
 
 
@@ -127,6 +130,7 @@ void print_usage() {
 		 << "                             -M xtandem=<-log(Evalue)>  Use negative log of X-tandem expect score: -log(Evalue)\n"
 		 << "                             -M mascot=<ionScore> Use the Mascot ion-score\n\n"
 
+		 << "   --Sl <file>               Score and report only results for the PSMs in this file, one PSM ID per line\n"
 		 << "   --hcd                     Tells me that the data is HCD data and to adjust my parameters accordingly\n"
 		 << "   --noDecoys                Do *NOT* estimate False Localization Rate (FLR) using decoy phosphorylation sites (Luciphor only option)\n"
 		 << "   --single                  Represent modified residues by a single character (usually the AA letter in lower case)\n"
@@ -159,6 +163,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 	string *scoringStr = NULL; // for -P option
 	string *modelingStr = NULL; // for -M option
 	string *decoyStr = NULL; // for decoy amino acid
+	string PSMfile;
 
 	int nn = 0;
 	int c;
@@ -262,6 +267,10 @@ void parse_command_line_args(int argc, char *argv[]) {
 				}
 				if( strcmp("debug", longOpts[longIndex].name) == 0 ) {
 					g_DEBUG_MODE = true;
+				}
+				if( strcmp("Sl", longOpts[longIndex].name) == 0 ) {
+					g_scoreSelect = true;
+					PSMfile = optarg;
 				}
 			}
 			break;
@@ -408,6 +417,12 @@ void parse_command_line_args(int argc, char *argv[]) {
 		cerr << "\tRunning the Full Monty. I will report ALL spectra\n";
 	}
 
+	if( g_scoreSelect ) {
+		parsePSMfile(PSMfile);
+		cerr << "\tOnly the " << g_PSMscoreSet.size() << " PSMs from '"
+			 << PSMfile << "' will be scored\n";
+	}
+
 	if(g_writeDTA) {
 		cerr << "\tWriting matched peaks to disk. Peak format: ";
 		if(g_intensityType == 1) cerr << "RAW Intensities";
@@ -420,6 +435,8 @@ void parse_command_line_args(int argc, char *argv[]) {
 
 	if(g_DEBUG_MODE) cerr << "\tRunning in debug mode (Limited to 1 thread)...\n";
 	cerr << endl;
+
+
 
 
 	if( !g_userDefinedOutput ) {
@@ -1097,6 +1114,32 @@ bool hasChar(string txt, string ch) {
 
 	return ret;
 }
+
+
+
+// Function parses the given file recording the PSM identifiers in it
+void parsePSMfile(string srcFile) {
+
+	g_PSMscoreSet.clear();
+
+	ifstream inF;
+	inF.open(srcFile.c_str(), ios::in);
+	if(!inF.is_open()) {
+		cerr << "\nERROR: PSM file '" << srcFile << "' not found\n";
+		exit(-1);
+	}
+
+	string line;
+	while(inF.good()) {
+		line = ""; // prep for next iteration
+		getline(inF, line);
+		if(line.at(0) == '#') continue; // skip comment lines
+
+		g_PSMscoreSet.insert(line);
+	}
+	inF.close();
+}
+
 
 
 
