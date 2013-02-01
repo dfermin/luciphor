@@ -13,7 +13,7 @@ fi
 
 cmd="$PWIZ_BJAM toolset=$toolset $@"
 
-#touch src/luciphor.cpp 
+touch src/luciphor.cpp 
 
 clear
 
