@@ -486,7 +486,6 @@ void PepXMLClass::acquireModelParameters() {
 	// and collect the intensities of the classified peaks.
 	// We will only use spectra with a probability >= modelProb
 	// to compute the model parameters.
-	//N = (signed) modelData.size();
 	i = 0;
 	cerr << "\nAcquiring model parameters from " << numPSMs_forModeling << " spectra with Score >= "
 		 << g_model_prob << endl;
@@ -548,7 +547,7 @@ void PepXMLClass::acquireModelParameters() {
 		if(zN >= g_MIN_MODEL_NUM) { // record modeling parameters only if you have data for the current charge state
 
 			// prune intensity distributions to remove extreme outliers
-			double percentile_trim = 0.1;
+//			double percentile_trim = 0.1;
 //			pruneList(&M_ints_B, percentile_trim);
 //			pruneList(&M_ints_Y, percentile_trim);
 //			pruneList(&U_ints, percentile_trim);
@@ -650,8 +649,6 @@ void PepXMLClass::acquireModelParameters() {
 		else {
 			missedChargeStates.insert(curChargeState);
 		}
-
-
 
 		// just some clean up
 		M_ints_B.clear();
@@ -777,93 +774,11 @@ void PepXMLClass::acquireModelParameters_HCD() {
 
 
 
-/****************************************************************************************************************
-	//
-	// For HCD data we are generating a random peptide and using it's matched peaks
-	// for the unmatched parameters.
-	//
-	decoyDeq = new deque<PSMClass>;
-
-	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-
-		if( !curPSM->useForModeling() ) continue;
-
-		decoyPSM = new PSMClass();
-		*decoyPSM = *curPSM;
-		decoyPSM->randomizeSeq();
-
-		decoyDeq->push_back(*decoyPSM);
-		delete(decoyPSM);
-	}
-
-	for(curPSM = decoyDeq->begin(); curPSM != decoyDeq->end(); curPSM++) {
-		TP.schedule( boost::bind(&PSMClass::threaded_recordModelingParameters_matched, boost::ref(*curPSM) ));
-	}
-	TP.wait(); // wait for all the threads to end
-
-
-	// record the randomized sequence distances and intensities
-	for(curPSM = decoyDeq->begin(); curPSM != decoyDeq->end(); curPSM++) {
-
-		if( !curPSM->useForModeling() ) continue;
-
-		curPSM->adjust_mz_dist('m', (g_MZ_ERR*0.5)); // we limit this function to just unmatched data
-
-		// random peak intensities
-		ptr = curPSM->getParamList('m', 'y', 'i');
-		for(L = ptr->begin(); L != ptr->end(); L++) U_ints.push_back(*L);
-
-		ptr = curPSM->getParamList('m', 'b', 'i');
-		for(L = ptr->begin(); L != ptr->end(); L++) U_ints.push_back(*L);
-
-
-		// random peak distances
-		ptr = curPSM->getParamList('m', 'y', 'd');
-		for(L = ptr->begin(); L != ptr->end(); L++) U_dist.push_back(*L);
-
-		ptr = curPSM->getParamList('m', 'b', 'd');
-		for(L = ptr->begin(); L != ptr->end(); L++) U_dist.push_back(*L);
-	}
-
-	delete(decoyDeq); // clean up
-****************************************************************************************************************/
-
-/***************************************************************************************************************
-	// Collect unmatched peak parameters. For HCD data we only use
-	// the intensity data
-	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-
-		if( !curPSM->useForModeling() ) continue;
-
-		TP.schedule( boost::bind(&PSMClass::threaded_recordModelingParameters_UNmatched, boost::ref(*curPSM) ));
-	}
-	TP.wait(); // wait for all the threads to end
-***************************************************************************************************************/
-
-
-
-//	// record the unmatched distances and intensities
-//	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-//
-//		if( !curPSM->useForModeling() ) continue;
-//
-//		// Unmatched peak intensities
-//		ptr = curPSM->getParamList('u', 'u', 'i');
-//		for(L = ptr->begin(); L != ptr->end(); L++)
-//			if( !isInfinite(*L) && !dbl_isnan(*L) ) U_ints.push_back(*L);
-//
-//		// Unmatched peak distances
-//		ptr = curPSM->getParamList('u', 'u', 'd');
-//		for(L = ptr->begin(); L != ptr->end(); L++)
-//			if( !isInfinite(*L) && !dbl_isnan(*L) ) U_dist.push_back(*L);
-//
-//	}
-
 
 	if(zN >= g_MIN_MODEL_NUM) { // record modeling parameters only if you have data for the current charge state
 
 		// prune intensity distributions to remove extreme outliers
-		double percentile_trim = 0.1;
+//		double percentile_trim = 0.1;
 //		pruneList(&M_ints, percentile_trim);
 //		pruneList(&U_ints, percentile_trim);
 

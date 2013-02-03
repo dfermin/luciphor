@@ -337,10 +337,6 @@ void PSMClass::identifyNeutralLossPeak() {
 					if( *L == *L2 ) { // found index of the current neutral loss peak
 						score = (N - i) / N;
 						candScores.push_back(score);
-						if(g_DEBUG_MODE) {
-							cerr << specId << "  index="<< i << "\tN="<< N
-								 << "\tintensity=" << *L << " \tscore=" << score << endl;
-						}
 					}
 					i++;
 				}
@@ -723,12 +719,7 @@ void PSMClass::classifyPeaks() {
 		mz = curPeak->first;
 		intensity = curPeak->second.at(peakType);
 
-		// if the data is HCD data, keep/use all peaks regardless of intensity
-		if(g_IS_HCD) spectrum->insert( pair<double, double>(mz, intensity) );
-		else {
-			// for CID data, retain only peak whose median normalized values are > 0 in log scale
-			if(intensity > 0) spectrum->insert( pair<double, double>(mz, intensity) );
-		}
+		spectrum->insert( pair<double, double>(mz, intensity) );
 	}
 
 	for(curPermutation = phosphoVersionSet.begin(); curPermutation != phosphoVersionSet.end(); curPermutation++) {
@@ -905,47 +896,6 @@ void PSMClass::calcScore() {
 	//mutex_locker.unlock();
 }
 
-
-
-// Function to score each phospho-peptide permutation that is associated with this
-// PSMClass object
-//void PSMClass::get_rawScores() {
-//	set<string>::iterator curPermutation;
-//	MSProductClass *curMSProduct = NULL;
-//	map<double, double> *spectrum = NULL;
-//	map<double, vector<double> >::iterator curPeak;
-//	double mz, intensity;
-//
-//
-//	// store the relevant peak type into a new map that is passed to the curMSProduct object
-//	spectrum = new map<double, double>;
-//	for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
-//		mz = curPeak->first;
-//		intensity = curPeak->second.at(peakType);
-//		spectrum->insert( pair<double, double>(mz, intensity) );
-//	}
-//
-//
-//	for(curPermutation = phosphoVersionSet.begin(); curPermutation != phosphoVersionSet.end(); curPermutation++) {
-//
-//		curMSProduct = new MSProductClass(*curPermutation, charge, nterm_mass);
-//
-//		curMSProduct->assignSpectrumMap( *spectrum ); // spectrum should point to QN_spectrum map
-//
-//		curMSProduct->scoreTopPeaks(&local_params, specId);
-//
-//		delete(curMSProduct); curMSProduct = NULL;
-//	}
-//	delete(spectrum); spectrum = NULL;
-//
-//	// this code is only to provide the user some kind of feed back while the program is running
-//	//boost::mutex::scoped_lock mutex_locker(mutex1, defer_lock); // defer_lock is initially unlocked
-//	//mutex_locker.lock();
-//	g_progressCtr++;
-//	if(g_progressCtr % 100 == 0 ) cerr << g_progressCtr << " ";
-//	if(g_progressCtr % 1000 == 0 ) cerr << endl;
-//	//mutex_locker.unlock();
-//}
 
 
 
