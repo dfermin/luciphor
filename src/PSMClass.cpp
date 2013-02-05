@@ -1047,8 +1047,6 @@ void PSMClass::genDecoys() {
 
 	while( (signed)localDecoySet->size() < (int)numDecoyPermutations ) {
 		localDecoySet->insert( genRandDecoyPeptide(seq, numPhosphoSites) );
-
-		//if( (signed)localDecoySet->size() >= decoyLimit ) break;
 	}
 
 	for(s = localDecoySet->begin(); s != localDecoySet->end(); s++) {

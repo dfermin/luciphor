@@ -1030,7 +1030,8 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 			
 			double intense_wt = 1.0 / ( 1.0 + exp(-Iscore) );
 			if(dbl_isnan(Dscore) || isInfinite(Dscore) ) x = 0;
-			else x = Iscore + Dscore;
+			//else x = Iscore + Dscore; //<-- worked okay
+			else x = intense_wt * Dscore;
 
 			score += x;
 

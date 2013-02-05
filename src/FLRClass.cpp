@@ -399,7 +399,6 @@ void FLRClass::performMinorization() {
 	bool *isMinorPoint = NULL;
 
 
-
 	// 0 = global FDR, 1 = local FDR
 	for(int iter = 0; iter < 2; iter++) {
 
@@ -413,6 +412,8 @@ void FLRClass::performMinorization() {
 			mapPtr = &minorMapLocal;
 		}
 
+
+
 		N = (signed) mapPtr->size();
 
 		x = new double[N];
@@ -420,6 +421,8 @@ void FLRClass::performMinorization() {
 		fcopy = new double[N];
 		forig = new double[N];
 		isMinorPoint = new bool[N];
+
+
 
 		for(i = 0; i < N; i++) {
 			M = mapPtr->find(i);
@@ -429,6 +432,7 @@ void FLRClass::performMinorization() {
 			forig[i] = f[i];
 			isMinorPoint[i] = false;
 		}
+
 
 		// find minimum and set all the following points to the tail regression line
 		int minId = 0;
@@ -466,7 +470,6 @@ void FLRClass::performMinorization() {
 	    }
 
 
-
 	    for(i = 0; i < maxId; i++) isMinorPoint[i] = true;
 	    curStart = maxId;
 	    curEnd = maxId + 1;
@@ -502,6 +505,7 @@ void FLRClass::performMinorization() {
 	    	}
 	    }
 
+
 	    isMinorPoint[ N-1 ] = true; // check if this value is bigger than the second last minor point
 	    for(i = 0; i < N; i++) fcopy[i] = f[i];
 
@@ -524,6 +528,7 @@ void FLRClass::performMinorization() {
 	    	while( (isMinorPoint[curEnd] == false) && (curEnd < N) ) curEnd++;
 	    }
 
+
 	    // map back to globalFDR: f[] has minorized FDR values in increasing order of x[], which is deltaScore
 	    v = deqPtr->begin();
 
@@ -541,11 +546,12 @@ void FLRClass::performMinorization() {
 	    	v++;
 	    }
 
-	    delete[] x;
-		delete[] f;
-		delete[] fcopy;
-		delete[] forig;
-		delete[] isMinorPoint;
+	    delete[] x; x = NULL;
+		delete[] f; f = NULL;
+		delete[] fcopy; fcopy = NULL;
+		delete[] forig;  forig = NULL;
+		delete[] isMinorPoint;  isMinorPoint = NULL;
+
 	} // end iter for loop
 }
 
