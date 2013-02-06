@@ -391,12 +391,12 @@ void FLRClass::performMinorization() {
 	bool cont;
 	flrStruct *local_flr = NULL;;
 
-	// simple arrays here!!
-	double *x = NULL;
-	double *f = NULL;
-	double *fcopy = NULL;
-	double *forig = NULL;
-	bool *isMinorPoint = NULL;
+
+	deque<double> x;
+	deque<double> f;
+	deque<double> fcopy;
+	deque<double> forig;
+	deque<bool> isMinorPoint;
 
 
 	// 0 = global FDR, 1 = local FDR
@@ -412,25 +412,25 @@ void FLRClass::performMinorization() {
 			mapPtr = &minorMapLocal;
 		}
 
-
-
 		N = (signed) mapPtr->size();
 
-		x = new double[N];
-		f = new double[N];
-		fcopy = new double[N];
-		forig = new double[N];
-		isMinorPoint = new bool[N];
 
+		// initialize deques for next iteration
+		x.clear();
+		f.clear();
+		fcopy.clear();
+		forig.clear();
+		isMinorPoint.clear();
 
 
 		for(i = 0; i < N; i++) {
 			M = mapPtr->find(i);
-			x[i] = M->second.at(0);
-			f[i] = M->second.at(1);
 
-			forig[i] = f[i];
-			isMinorPoint[i] = false;
+			x.push_back( M->second.at(0) );
+			f.push_back( M->second.at(1) );
+			forig.push_back( M->second.at(1) );
+			fcopy.push_back(0);
+			isMinorPoint.push_back(false);
 		}
 
 
@@ -462,6 +462,7 @@ void FLRClass::performMinorization() {
 		   }
 		   i++;
 		}
+
 	    slope = (maxVal) / ( x[maxId] - x[N-1] );
 	    i = maxId - 1;
 	    while(i >= 0) {
@@ -475,6 +476,7 @@ void FLRClass::performMinorization() {
 	    curEnd = maxId + 1;
 
 	    while( x[curStart] >= x[curEnd] ) curEnd++;
+
 
 	    while( curStart < (N-1) ) {
 
@@ -504,7 +506,6 @@ void FLRClass::performMinorization() {
 				else curEnd++;
 	    	}
 	    }
-
 
 	    isMinorPoint[ N-1 ] = true; // check if this value is bigger than the second last minor point
 	    for(i = 0; i < N; i++) fcopy[i] = f[i];
@@ -545,12 +546,6 @@ void FLRClass::performMinorization() {
 	    	}
 	    	v++;
 	    }
-
-	    delete[] x; x = NULL;
-		delete[] f; f = NULL;
-		delete[] fcopy; fcopy = NULL;
-		delete[] forig;  forig = NULL;
-		delete[] isMinorPoint;  isMinorPoint = NULL;
 
 	} // end iter for loop
 }
