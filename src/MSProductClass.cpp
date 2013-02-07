@@ -915,7 +915,7 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 	map<double, peakStruct>::iterator curPeak;
 
 	// intensity variables
-	double muM_ints, muU_ints, varM_ints, varU_ints, log_int_M, log_int_U;
+	double muM_ints, muU_ints, varM_ints, varU_ints, log_int_M, log_int_U, intense_wt;
 
 	// distance variables
 	double muM_dist, varM_dist, varM_dist_IQR, log_dist_M, log_dist_U;
@@ -993,6 +993,7 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 			/*
 			 * INTENSITY
 			 */
+			intense_wt = 0;
 			// log_ints_M = log_gaussianProb(muM_ints, varM_ints, intensity);
 			// log_ints_U = log_gaussianProb(muU_ints, varU_ints, intensity);
 			// Iscore = log_ints_M - log_ints_U;
@@ -1021,16 +1022,19 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 
 
 			/*
-			 * Hyungwon removed the intensity component to the HCD score in this code
-			 *
-			double intense_wt = 1.0 / ( 1.0 + exp(-Iscore) );
+			 * Hyungwon removed the intensity component to the HCD score in this code.
+			 * It seems that the intensity component is unnessary for HCD data.
+			 */
 			if(dbl_isnan(Dscore) || isInfinite(Dscore) ) x = 0;
 			else x = Dscore;
 			/****/
-			
+		
+			/********************
+			// Old scoring method
 			double intense_wt = 1.0 / ( 1.0 + exp(-Iscore) );
 			if(dbl_isnan(Dscore) || isInfinite(Dscore) ) x = 0;
-			else x = Iscore + Dscore; //<-- this scoring method works best for the Kuster HCD data set
+			else x = Iscore + Dscore;
+			********************/
 
 			score += x;
 
