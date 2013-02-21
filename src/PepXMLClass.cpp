@@ -1155,7 +1155,6 @@ void PepXMLClass::process_with_Ascore() {
 
 		curPSM->setSpectrumPtr("raw");
 		curPSM->generatePermutations();
-		//if(g_randDecoyAA) curPSM->genDecoys();
 
 		TP.schedule(boost::bind( &PSMClass::runAscore, boost::ref(*curPSM) ));
 	}
@@ -1187,8 +1186,6 @@ void PepXMLClass::process_with_Ascore() {
 		 << "peakDepth\t"
 		 << "PeptideScore\t"
 		 << "Ascore\t"
-//		 << "isDecoy1\t"
-//		 << "isDecoy2\t"
 		 << "totalNumPeaks\t"
 		 << "numMatchedPeaks1\t"
 		 << "numMatchedPeaks2\n";
