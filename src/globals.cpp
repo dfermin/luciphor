@@ -84,6 +84,7 @@ static const struct option longOpts[] = {
 };
 
 
+
 void print_usage() {
 	cerr << "\nUSAGE: luciphor -i -d -w [ -e -f -m -p -o (-M -P) -t -b -T -A -n -c -Z -k]\n"
 		 << "   -i <interact.pep.xml>     pepXML file to analyze\n"
@@ -358,64 +359,85 @@ void parse_command_line_args(int argc, char *argv[]) {
 	}
 
 
-	// report to the user what parameters will be used
-	cerr << "\nParameters being used for this run:\n"
-	     << "\tScoring Method: " << g_scoringMethod << endl
-		 << "\tModel threshold Score >= " << g_model_prob << endl
-		 << "\tPeptide threshold Score >= " << g_prob_threshold << endl
-		 << "\tPermutation limit: " << g_NUM_PERMS_LIMIT << endl
-		 << "\tSpectra file type: '" << g_ext << "'\n"
-		 << "\tNumber of threads: " << g_NUM_THREADS << endl
-		 << "\tFragment ion tolerance: " << g_MZ_ERR ;
-
-	if(g_usePPM) cerr << " PPM\n";
-	else cerr << " Da\n";
-
-
-	if(g_useOnlySiteDetermIons) {
-		cerr << "\tOny site determining ions will be used for scoring\n";
-	}
-
 	if(g_IS_HCD) {
-		cerr << "\tRunning high-mass accuracy algorithm\n";
 		MIN_MZ = 100.0; // we can go pretty low in the m/z scale with HCD data
 		g_MIN_MODEL_NUM = 50; // since we don't separate based on charge state, we need to increase this
 	}
+
+	if( !g_userDefinedOutput ) {
+		// set the output file's name based upon input file's name
+		boost::filesystem::path curFile( g_srcXMLfile.c_str() );
+		string basename = curFile.leaf();
+		size_t found = basename.find('.');
+		if(found != string::npos) {
+			g_outputName = basename.substr(0, found);
+		}
+
+		if(g_runAscoreInstead) g_outputName += "_ascore_results.tsv";
+		else g_outputName += "_lucipher_results.tsv";
+	}
+
+
+
+
+	/***********************
+	 * Report to the user what parameters will be used
+	 ***********************/
+	cerr << "\nRun parameters:\n"
+		 << "Data type: " << g_scoringMethod << endl
+		 << "Modeling threshold >= " << g_model_prob << endl
+		 << "Scoring threshold  >= " << g_prob_threshold << endl
+		 << "Permutation limit: " << g_NUM_PERMS_LIMIT << endl
+		 << "Spectral format:   " << g_ext << endl
+		 << "Threads: " << g_NUM_THREADS << endl;
+
+	cerr << "Algorithm: ";
+	if(g_IS_HCD) cerr << "HCD\n";
+	else if(g_runAscoreInstead) cerr << "A-Score (Modeling thresholds will be ignored)\n";
+	else cerr << "CID\n";
+
+	cerr << "Decoys: " << g_randDecoyAA << endl;
+
+	cerr << "Fragment ion tolerance: ";
+	if(g_runAscoreInstead) cerr << "0.6 Da\n";
+	else {
+		cerr << g_MZ_ERR;
+		if(g_usePPM) cerr << " PPM\n";
+		else cerr << " Da\n";
+	}
+
+	cerr << "Output format: ";
+	if(g_FULL_MONTY) cerr << "Full Monty\n";
+	else cerr << "Default\n";
+
+	cerr << "Output to: " << g_outputName << endl;
+
+	cerr << "\nOther options used (if any):\n";
+
+	if(g_useOnlySiteDetermIons) {
+		cerr << "Ony site determining ions will be used for scoring\n";
+	}
+
 
 	if(g_NO_NL_PEAKS) {
 		cerr << "\tNeutral loss fragment ions will be ignored\n";
 	}
 
 	if(g_NO_NL_PEAKS_MODEL) {
-		cerr << "\tNeutral loss fragment ions will not be used when acquiring model parameters\n";
+		cerr << "\tNeutral loss fragment ions will *NOT* be used when acquiring model parameters\n";
 	}
 	if(g_NL_MODEL_ONLY) {
-		cerr << "\tNeutral loss fragment ions will only be used for acquriing model parameters\n";
-	}
-
-	if(g_runAscoreInstead) {
-		cerr << "\tRunning Ascore algorithm. (Modeling threshold will be ignored.)\n";
+		cerr << "\tNeutral loss fragment ions will *ONLY* be used for acquiring model parameters\n";
 	}
 
 	if(g_LIMIT_CHARGE_STATE) {
 		cerr << "\tWill only model and score +" << g_CHARGE_STATE << " PSMs\n";
 	}
 
-	if(g_captureChargeStateModel) {
+	if(g_captureChargeStateModel && !g_runAscoreInstead) {
 		cerr << "\tWill use nearest neighbor parameters for unmodeled charge states.\n";
 	}
 
-	if(g_randDecoyAA) {
-		cerr << "\tRandom decoy phospho-sites will be used to estimate FLR.\n";
-	}
-
-	if(g_userDefinedOutput) {
-		cerr << "\tResults will be written to: '" << g_outputName << "'\n";
-	}
-
-	if(g_FULL_MONTY) {
-		cerr << "\tRunning the Full Monty. I will report ALL spectra\n";
-	}
 
 	if( g_scoreSelect ) {
 		parsePSMfile(PSMfile);
@@ -436,21 +458,6 @@ void parse_command_line_args(int argc, char *argv[]) {
 	if(g_DEBUG_MODE) cerr << "\tRunning in debug mode (Limited to 1 thread)...\n";
 	cerr << endl;
 
-
-
-
-	if( !g_userDefinedOutput ) {
-		// set the output file's name based upon input file's name
-		boost::filesystem::path curFile( g_srcXMLfile.c_str() );
-		string basename = curFile.leaf();
-		size_t found = basename.find('.');
-		if(found != string::npos) {
-			g_outputName = basename.substr(0, found);
-		}
-
-		if(g_runAscoreInstead) g_outputName += "_ascore_results.tsv";
-		else g_outputName += "_lucipher_results.tsv";
-	}
 }
 
 

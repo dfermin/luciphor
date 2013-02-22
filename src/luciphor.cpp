@@ -22,15 +22,22 @@ using namespace std;
 
 int main(int argc, char *argv[]) {
 
+	// This code constructs the build time stamp for this version of Luciphor.
     char *build_date = __DATE__;
     char *build_time = __TIME__;
 
-    g_BUILD_TIME.assign(build_date);
-    g_BUILD_TIME.append("-");
-    g_BUILD_TIME.append(build_time);
+    string date = build_date; // defaults to month day year
+    string yr  = date.substr( date.find_last_of(" ") + 1 );
+    string day = date.substr( (date.find_first_of(" ")+1), 2 );
+    string mon = date.substr( 0, date.find_first_of(" ") );
 
-	cerr << "\nLuciphor BUILD: " << g_BUILD_TIME << endl << endl;
+    g_BUILD_TIME = yr + mon + day + "-" + build_time;
 
+	cerr << "\nLuciphor BUILD: " << g_BUILD_TIME << endl;
+
+
+
+	// now the program starts
 	parse_command_line_args(argc, argv);
 	initialize_AA_masses();
 
