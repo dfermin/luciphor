@@ -1204,7 +1204,6 @@ list<double> PSMClass::getDistances(char x, char ionType) {
 
 
 
-
 // Function runs Ascore on the current PSMClass object
 void PSMClass::runAscore() {
 
@@ -1416,12 +1415,11 @@ void PSMClass::runAscore() {
 
 	} //end else
 
+
 	g_progressCtr++;
 	if(g_progressCtr % 100 == 0 ) cerr << g_progressCtr << " ";
 	if(g_progressCtr % 1000 == 0 ) cerr << endl;
 }
-
-
 
 
 // Function writes Ascore results to disk

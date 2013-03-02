@@ -475,7 +475,7 @@ double AscoreClass::getPeptideScore() {
 	double depthWt[] = { 0, 0.5, 0.75, 1, 1, 1, 1, 0.75, 0.5, 0.25, 0.25 };
 
 	// skip this PSM, it is an unambiguous case
-	if(numPotentialSites == numPhosphorylations) return 1000;
+	//if(numPotentialSites == numPhosphorylations) return 1000;
 	
 	
 	for(int numPeaks = 1; numPeaks <= 10; numPeaks++) { // number of peaks per m/z window
