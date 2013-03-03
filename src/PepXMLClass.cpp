@@ -810,20 +810,31 @@ void PepXMLClass::acquireModelParameters_HCD() {
 		double meanU_dist = getMode(&U_dist);
 		double varU_dist  = getMode(&U_dist);
 
-		cerr << endl
-			 << "# PSM: " << zN << " with Score >= " << g_model_prob << endl
-			 << "Intensity Matched (mean, stdev): (" <<  meanM_ints << ", " << sqrt(varM_ints) << "); N = " << M_ints.size() << endl
-			 << "Distance Matched  (mode, stdev): (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl
-			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl
-			 << "Distance Unmatched (mean, stdev):  (" << meanU_dist << ", " << sqrt(varU_dist) << "); N = " << U_dist.size() << endl;
+		cerr << "\n# PSM: " << zN << " with Score >= " << g_model_prob << endl;
+
+		if(g_HCD_MODE == 0) {
+			cerr << "Distance Matched  (mode, stdev): (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl;
+		}
+		if(g_HCD_MODE == 1) {
+			cerr << "Distance Matched  (mode, stdev): (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl
+			     << "Intensity Matched (mean, stdev):   (" <<  meanM_ints << ", " << sqrt(varM_ints) << "); N = " << M_ints.size() << endl
+				 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl;
+		}
+
+		cerr << endl; // makes for prettier stderr
+
+
+//			 << "Distance Matched  (mode, stdev): (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl;
+//			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl
+//			 << "Distance Unmatched (mean, stdev):  (" << meanU_dist << ", " << sqrt(varU_dist) << "); N = " << U_dist.size() << endl;
 
 
 		logF << endl
 			 << "# PSM: " << zN << " with Score >= " << g_model_prob << endl
 			 << "Intensity Matched (mean, stdev): (" <<  meanM_ints << ", " << sqrt(varM_ints) << "); N = " << M_ints.size() << endl
 			 << "Distance Matched  (mean, stdev): (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl
-			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl
-			 << "Distance Unmatched (mean, stdev):  (" << meanU_dist << ", " << sqrt(varU_dist) << "); N = " << U_dist.size() << endl;
+			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl;
+			 //<< "Distance Unmatched (mean, stdev):  (" << meanU_dist << ", " << sqrt(varU_dist) << "); N = " << U_dist.size() << endl;
 
 
 		curParams = new modelParamStruct();

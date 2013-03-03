@@ -63,6 +63,7 @@ int g_NUM_THREADS = 1;
 int g_intensityType = 2;
 int g_CHARGE_STATE = 0;
 int g_MIN_MODEL_NUM = 10;
+int g_HCD_MODE = -1;
 
 map<char, char> decoyAA;
 map<char, double> AAmass;
@@ -76,7 +77,7 @@ static const struct option longOpts[] = {
 		{ "single", no_argument, NULL, 0 },
 		{ "capture", no_argument, NULL, 'c' },
 		{ "noDecoys", no_argument, NULL, 0 },
-		{ "hcd", no_argument, NULL, 0 },
+		{ "hcd", required_argument, NULL, 0 },
 		{ "siteDetermIons", no_argument, NULL, 0 },
         { "ppm", no_argument, NULL, 0 },
 		{ "debug", no_argument, NULL, 0 },
@@ -89,23 +90,27 @@ void print_usage() {
 	cerr << "\nUSAGE: luciphor -i -d -w [ -e -f -m -p -o (-M -P) -t -b -T -A -n -c -Z -k]\n"
 		 << "   -i <interact.pep.xml>     pepXML file to analyze\n"
 		 << "   -d <path>                 the path to the spectral data files\n"
-		 << "   -w <# greater than 0>     The MS2 fragment ion tolerance in Daltons (default is  +/- " << g_MZ_ERR << " Da.)\n"
+		 << "   -w <# greater than 0>     The MS2 fragment ion tolerance in Daltons (default is " << g_MZ_ERR << " Da.)\n"
 
 		 << "\nOptional parameters\n"
 		 << "   -p <0.0-1.0>              min. Peptide probability threshold (default is " << g_prob_threshold << ")\n"
 		 << "   -m <0.0-1.0>              min. Peptide probability to use for parameter estimations (default is " << g_model_prob << ")\n"
-		 << "   -e <mzML, mzXML>		  File extension used for reading spectral data files (default is mzXML)\n"
+		 << "   -e <mzML, mzXML>          File extension used for reading spectral data files (default is mzXML)\n"
 		 << "   -f                        \"The Full Monty\": Report scores for all spectra not just representative ones\n"
-		 //<< "   -s                        Represent modified residues by a single character (usually the AA letter in lower case)\n"
 		 << "   -A / --Ascore             Run Gygi's Ascore algorithm instead (m/z window fixed at 0.5 for this)\n"
 		 << "   -c / --capture            Capture PSM's you can't model, use the model parameters for the next closest charge state\n"
 		 << "   -Z <1,2,3...>             Only model and score spectra of the given charge state\n"
 		 << "   -o <output_file_name>     Write results to this file name (default output name is based upon input pepXML file name)\n\n"
+		 << "   -T <1-N>                  Number of threads to use (default is 1)\n"
+
+		 << "   --hcd <0,1>               Tells me that the input data is HCD and to adjust my parameters accordingly\n"
+		 << "                             0 = use only mass accuracy\n"
+		 << "                             1 = use both mass accuracy and peak intensity\n\n"
 
 		 << "   -k <256-N>                Consider PSMs with 'k' number of permutations (default is " << g_NUM_PERMS_LIMIT << ", minimum is 256)\n"
 		 << "                             *Note: increasing this parameter beyond " << g_NUM_PERMS_LIMIT << " requires >8GB of RAM and many hours to run\n\n"
 
-		 << "   -T <1-N>                  Number of threads to use (default is 1)\n\n"
+
 
 		 << "   -n <1,2,3>                Tells me how to deal with neutral loss fragment ions\n"
 		 << "                             By default, neutral loss peaks are used for both modeling and scoring\n"
@@ -118,7 +123,7 @@ void print_usage() {
 		 << "   -b                        When writing spectra to disk, write *BOTH* luciphor peptide predictions to disk\n\n"
 
 		 << "   -P <score_method>         Use this option if you want to pick spectra based upon\n"
-		 << "                             a search engine score instead of probabilities\n"
+		 << "                             a search engine score instead of PeptideProphet probabilities\n"
 		 << "                             *** You MUST use -M _WITH_ -P ***\n"
 		 << "                             -P sequest=<Xcorr>   Use the Sequest XCorr values\n"
 		 << "                             -P xtandem=<-log(Evalue)>  Use negative log of X-tandem expect score: -log(Evalue)\n"
@@ -132,7 +137,6 @@ void print_usage() {
 		 << "                             -M mascot=<ionScore> Use the Mascot ion-score\n\n"
 
 		 << "   --Sl <file>               Score and report only results for the PSMs in this file, one PSM ID per line\n"
-		 << "   --hcd                     Tells me that the data is HCD data and to adjust my parameters accordingly\n"
 		 << "   --noDecoys                Do *NOT* estimate False Localization Rate (FLR) using decoy phosphorylation sites (Luciphor only option)\n"
 		 << "   --single                  Represent modified residues by a single character (usually the AA letter in lower case)\n"
 		 << "   --siteDetermIons          Use only site determining ions in final scoring (Luciphor only option)\n\n"
@@ -253,6 +257,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 				}
 				if( strcmp("hcd", longOpts[longIndex].name) == 0 ) {
 					g_IS_HCD = true;
+					g_HCD_MODE = atoi(optarg);
 				}
 				if( strcmp("noDecoys", longOpts[longIndex].name) == 0 ) {
 					g_randDecoyAA = false;
@@ -362,6 +367,12 @@ void parse_command_line_args(int argc, char *argv[]) {
 	if(g_IS_HCD) {
 		MIN_MZ = 100.0; // we can go pretty low in the m/z scale with HCD data
 		g_MIN_MODEL_NUM = 50; // since we don't separate based on charge state, we need to increase this
+
+		if( (g_HCD_MODE != 0) && (g_HCD_MODE != 1) ) {
+			cerr << "g_HCD_MODE = " << g_HCD_MODE;
+			cerr << "\nERROR: --hcd options are either 0 or 1\n\n";
+			exit(0);
+		}
 	}
 
 	if( !g_userDefinedOutput ) {
@@ -383,7 +394,8 @@ void parse_command_line_args(int argc, char *argv[]) {
 	/***********************
 	 * Report to the user what parameters will be used
 	 ***********************/
-	cerr << "\nRun parameters:\n"
+	cerr << "\n==============================================================\n"
+	     << "Run parameters:\n"
 		 << "Data type: " << g_scoringMethod << endl
 		 << "Modeling threshold >= " << g_model_prob << endl
 		 << "Scoring threshold  >= " << g_prob_threshold << endl
@@ -392,7 +404,11 @@ void parse_command_line_args(int argc, char *argv[]) {
 		 << "Threads: " << g_NUM_THREADS << endl;
 
 	cerr << "Algorithm: ";
-	if(g_IS_HCD) cerr << "HCD\n";
+	if(g_IS_HCD) {
+		cerr << "HCD Mode ";
+		if(g_HCD_MODE == 0) cerr << g_HCD_MODE << " (mass accuracy only)\n";
+		if(g_HCD_MODE == 1) cerr << g_HCD_MODE << " (mass accuracy + peak intensity)\n";
+	}
 	else if(g_runAscoreInstead) cerr << "A-Score (Modeling thresholds will be ignored)\n";
 	else cerr << "CID\n";
 
@@ -456,8 +472,8 @@ void parse_command_line_args(int argc, char *argv[]) {
 
 
 	if(g_DEBUG_MODE) cerr << "\tRunning in debug mode (Limited to 1 thread)...\n";
-	cerr << endl;
 
+	cerr << "==============================================================\n";
 }
 
 
