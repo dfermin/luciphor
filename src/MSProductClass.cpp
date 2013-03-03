@@ -808,7 +808,8 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 							<< "log_dist_M" << "\t"
 							<< "log_dist_U" << "\t"
 							<< "Iscore" << "\t"
-							<< "Dscore" << endl;
+							<< "Dscore" << "\t"
+							<< "score" << endl; // final score for peak
 		}
 	}
 
@@ -894,7 +895,8 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 								<< log_dist_M << "\t"
 								<< log_dist_U << "\t"
 								<< Iscore << "\t"
-								<< Dscore << endl;
+								<< Dscore << "\t"
+								<< x << endl; // final score for peak
 			}
 		}
 	}
@@ -943,23 +945,17 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 							<< "ionSeq" << "\t"
 							<< "mz" << "\t"
 							<< "intensity" << "\t"
-							<< "mzDist" << "\t";
-
-			if(g_HCD_MODE == 0) {
-				debug_ionScores << "log_dist_M\t"
-								<< "log_dist_U\t"
-								<< "Dscore\t";
-			}
-			if(g_HCD_MODE == 1) {
-				debug_ionScores << "log_ints_M" << "\t"
+							<< "mzDist" << "\t"
+				            << "log_dist_M\t"
+							<< "log_dist_U\t"
+							<< "Dscore\t"
+							<< "log_ints_M" << "\t"
 							<< "log_ints_U" << "\t"
 							<< "log_dist_M" << "\t"
 							<< "log_dist_U" << "\t"
 							<< "Iscore" << "\t"
-							<< "Dscore" << "\t";
-			}
-
-			debug_ionScores << "score\n";
+							<< "Dscore" << "\t"
+						 	<< "score\n";
 		}
 	}
 
@@ -1016,37 +1012,30 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 
 			Dscore = log_dist_M - log_dist_U;
 
-			// default scoring method using only m/z distances
-			if(g_HCD_MODE == 0) {
-				if(dbl_isnan(Dscore) || isInfinite(Dscore) ) x = 0;
-				else x = Dscore;
-			}
 
 			// scoring with both intensity and m/z distances equally weighted
-			if(g_HCD_MODE == 1) {
-				if(dbl_isnan(Iscore) || isInfinite(Iscore) ) Iscore = 0;
-				if(dbl_isnan(Dscore) || isInfinite(Dscore) ) Dscore = 0;
+			if(dbl_isnan(Iscore) || isInfinite(Iscore) ) Iscore = 0;
+			if(dbl_isnan(Dscore) || isInfinite(Dscore) ) Dscore = 0;
 
-				x = Iscore + Dscore;
-			}
+			x = Iscore + Dscore;
 
+			score += x;
 
-			/*
+			/******************************************************
+			 *
 			 * Hyungwon removed the intensity component to the HCD score in this code.
 			 * It seems that the intensity component is unnessary for HCD data.
 			 *
-			if(dbl_isnan(Dscore) || isInfinite(Dscore) ) x = 0;
-			else x = Dscore;
-			/****/
-		
-			/********************
-			// Old scoring method
-			double intense_wt = 1.0 / ( 1.0 + exp(-Iscore) );
-			if(dbl_isnan(Dscore) || isInfinite(Dscore) ) x = 0;
-			else x = Iscore + Dscore;
-			********************/
+				if(dbl_isnan(Dscore) || isInfinite(Dscore) ) x = 0;
+				else x = Dscore;
 
-			score += x;
+				score += x;
+			 *
+			/*************************************/
+
+
+
+
 
 			/***************************************************/
 			/***************************************************/
@@ -1058,23 +1047,17 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 								<< ionSeq << "\t"
 								<< mz << "\t"
 								<< intensity << "\t"
-								<< mzDist << "\t";
-
-				if(g_HCD_MODE == 0) {
-					debug_ionScores << log_dist_M << "\t"
-								    << log_dist_U << "\t"
-								    << Dscore << endl;
-				}
-				if(g_HCD_MODE == 1) {
-					debug_ionScores << log_int_M << "\t"
+								<< mzDist << "\t"
+								<< log_dist_M << "\t"
+								<< log_dist_U << "\t"
+								<< Dscore << "\t"
+								<< log_int_M << "\t"
 								<< log_int_U <<  "\t"
 								<< log_dist_M << "\t"
 								<< log_dist_U << "\t"
 								<< Iscore << "\t"
-								<< Dscore << "\t";
-				}
-
-				debug_ionScores << x << endl; // score for this ion
+								<< Dscore << "\t"
+								<< x << endl; // score for this ion
 			}
 		}
 	}

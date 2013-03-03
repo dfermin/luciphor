@@ -63,7 +63,6 @@ int g_NUM_THREADS = 1;
 int g_intensityType = 2;
 int g_CHARGE_STATE = 0;
 int g_MIN_MODEL_NUM = 10;
-int g_HCD_MODE = -1;
 
 map<char, char> decoyAA;
 map<char, double> AAmass;
@@ -77,7 +76,7 @@ static const struct option longOpts[] = {
 		{ "single", no_argument, NULL, 0 },
 		{ "capture", no_argument, NULL, 'c' },
 		{ "noDecoys", no_argument, NULL, 0 },
-		{ "hcd", required_argument, NULL, 0 },
+		{ "hcd", no_argument, NULL, 0 },
 		{ "siteDetermIons", no_argument, NULL, 0 },
         { "ppm", no_argument, NULL, 0 },
 		{ "debug", no_argument, NULL, 0 },
@@ -103,9 +102,7 @@ void print_usage() {
 		 << "   -o <output_file_name>     Write results to this file name (default output name is based upon input pepXML file name)\n\n"
 		 << "   -T <1-N>                  Number of threads to use (default is 1)\n"
 
-		 << "   --hcd <0,1>               Tells me that the input data is HCD and to adjust my parameters accordingly\n"
-		 << "                             0 = use only mass accuracy\n"
-		 << "                             1 = use both mass accuracy and peak intensity\n\n"
+		 << "   --hcd                     Tells me that the input data is HCD and to adjust my parameters accordingly\n\n"
 
 		 << "   -k <256-N>                Consider PSMs with 'k' number of permutations (default is " << g_NUM_PERMS_LIMIT << ", minimum is 256)\n"
 		 << "                             *Note: increasing this parameter beyond " << g_NUM_PERMS_LIMIT << " requires >8GB of RAM and many hours to run\n\n"
@@ -174,7 +171,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 	int c;
 
 	int longIndex;
-	while( (c = getopt_long(argc, argv, "m:p:i:w:d:e:T:t:P:M:o:n:Z:k:fAcbH", longOpts, &longIndex)) != -1 ) {
+	while( (c = getopt_long(argc, argv, "m:p:i:w:d:e:T:t:P:M:o:n:Z:k:fAcb", longOpts, &longIndex)) != -1 ) {
 		switch(c) {
 
 		case 'k':
@@ -195,9 +192,6 @@ void parse_command_line_args(int argc, char *argv[]) {
 			break;
 		case 'T':
 			g_NUM_THREADS = atoi(optarg);
-			break;
-		case 'H':
-			g_IS_HCD = true;
 			break;
 		case 'f':
 			g_FULL_MONTY = true;
@@ -257,7 +251,6 @@ void parse_command_line_args(int argc, char *argv[]) {
 				}
 				if( strcmp("hcd", longOpts[longIndex].name) == 0 ) {
 					g_IS_HCD = true;
-					g_HCD_MODE = atoi(optarg);
 				}
 				if( strcmp("noDecoys", longOpts[longIndex].name) == 0 ) {
 					g_randDecoyAA = false;
@@ -310,9 +303,8 @@ void parse_command_line_args(int argc, char *argv[]) {
 
 	if(g_NUM_PERMS_LIMIT < 256) { // minimum permutation threshold
 
-		cerr << "\nERROR: Option '-k' is below minimum value of 256.\n"
-			 << "Resetting it to 256\n";
-		g_NUM_PERMS_LIMIT = 256;
+		cerr << "\nERROR: Option '-k' is below minimum value of 256.\n";
+		exit(0);
 	}
 
 	if( g_runAscoreInstead ) { // no decoy modeling for Ascore
@@ -367,12 +359,6 @@ void parse_command_line_args(int argc, char *argv[]) {
 	if(g_IS_HCD) {
 		MIN_MZ = 100.0; // we can go pretty low in the m/z scale with HCD data
 		g_MIN_MODEL_NUM = 50; // since we don't separate based on charge state, we need to increase this
-
-		if( (g_HCD_MODE != 0) && (g_HCD_MODE != 1) ) {
-			cerr << "g_HCD_MODE = " << g_HCD_MODE;
-			cerr << "\nERROR: --hcd options are either 0 or 1\n\n";
-			exit(0);
-		}
 	}
 
 	if( !g_userDefinedOutput ) {
@@ -404,13 +390,9 @@ void parse_command_line_args(int argc, char *argv[]) {
 		 << "Threads: " << g_NUM_THREADS << endl;
 
 	cerr << "Algorithm: ";
-	if(g_IS_HCD) {
-		cerr << "HCD Mode ";
-		if(g_HCD_MODE == 0) cerr << g_HCD_MODE << " (mass accuracy only)\n";
-		if(g_HCD_MODE == 1) cerr << g_HCD_MODE << " (mass accuracy + peak intensity)\n";
-	}
+	if(g_IS_HCD) cerr << "HCD Mode\n";
 	else if(g_runAscoreInstead) cerr << "A-Score (Modeling thresholds will be ignored)\n";
-	else cerr << "CID\n";
+	else cerr << "CID Mode\n";
 
 	cerr << "Decoys: " << g_randDecoyAA << endl;
 
@@ -431,7 +413,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 	cerr << "\nOther options used (if any):\n";
 
 	if(g_useOnlySiteDetermIons) {
-		cerr << "Ony site determining ions will be used for scoring\n";
+		cerr << "\tOny site determining ions will be used for scoring\n";
 	}
 
 
@@ -467,7 +449,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 		if(g_intensityType == 2) cerr << "Scaled Intensities (0-100)";
 		if(g_intensityType == 3) cerr << "Median Normalized Intensities";
 	}
-	cerr << endl;
+
 	if(g_WRITE_TOP_TWO) cerr << "\tWriting matched peaks for BOTH predictions\n";
 
 

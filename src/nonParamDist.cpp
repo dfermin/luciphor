@@ -473,7 +473,7 @@ void estimateNonparamInt_b(list<double> *ptr, modelParamStruct *paramPtr, double
 	paramPtr->bw_int_b = 1.06 * (sigma / pow(nmatched, 0.2) );
 	paramPtr->bw_int_b *= 0.5;
 
-	if(g_HCD_MODE == 1) cerr << "b-ion Intensity Matched NP Bandwidth: " << paramPtr->bw_int_b << endl;
+	cerr << "b-ion Intensity Matched NP Bandwidth: " << paramPtr->bw_int_b << endl;
 
 	deque<double>::iterator curScore;
 	paramPtr->f_int_b.resize(paramPtr->ntick_int);
@@ -534,7 +534,7 @@ void estimateNonparamInt_y(list<double> *ptr, modelParamStruct *paramPtr, double
 	paramPtr->bw_int_y = 1.06 * (sigma / pow(nmatched, 0.2) );
 	paramPtr->bw_int_y *= 0.5;
 
-	if(g_HCD_MODE == 1) cerr << "y-ion Intensity Matched NP Bandwidth: " << paramPtr->bw_int_y << endl;
+	cerr << "y-ion Intensity Matched NP Bandwidth: " << paramPtr->bw_int_y << endl;
 
 	deque<double>::iterator curScore;
 	paramPtr->f_int_y.resize(paramPtr->ntick_int);
@@ -598,7 +598,7 @@ void estimateNonparamInt_U(list<double> *ptr, modelParamStruct *paramPtr, double
 	paramPtr->bw_int_U = 1.06 * (sigma / pow(nmatched, 0.2) );
 	paramPtr->bw_int_U *= 0.5;
 
-	if(g_HCD_MODE == 1) cerr << "Intensity Unmatched NP Bandwidth: " << paramPtr->bw_int_U << endl;
+	cerr << "Intensity Unmatched NP Bandwidth: " << paramPtr->bw_int_U << endl;
 
 
 	deque<double>::iterator curScore;

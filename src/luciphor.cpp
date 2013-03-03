@@ -31,6 +31,8 @@ int main(int argc, char *argv[]) {
     string day = date.substr( (date.find_first_of(" ")+1), 2 );
     string mon = date.substr( 0, date.find_first_of(" ") );
 
+    if(day.at(0) == ' ') day.at(0) = '0';
+
     g_BUILD_TIME = yr + mon + day + "-" + build_time;
 
 	cerr << "\nLuciphor BUILD: " << g_BUILD_TIME << endl;

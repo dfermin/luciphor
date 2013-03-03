@@ -62,7 +62,6 @@ extern int g_intensityType;
 extern int g_progressCtr;
 extern int g_totalNumPSM;
 extern int g_CHARGE_STATE;
-extern int g_HCD_MODE;
 extern int g_MIN_MODEL_NUM; // minimum number of PSMs you need for modeling
 extern map<char, string> modAAmap;
 extern map<char, char> decoyAA;
