@@ -15,17 +15,18 @@ p {
 #code2 {
 	font-family:Monospace;
 	font-weight:bold;
+	font-size:120%;
 }
 #code {
 	margin: 20px, 20px;
-	padding: 5px 10px;
+	padding: 2px 10px;
 	font-family:Monospace;
-	background-color:#CCFFFF;
+	background-color:#F8F8F8;
 }
 #main {
-	margin: 20px, auto;
-	padding: 20px;
-	width: 960px;
+	margin: 40px, auto;
+	padding: 40px;
+	width: 940px;
 }
 </style>
 </head>
@@ -39,133 +40,51 @@ The instructions are written assuming you are using RHEL/CENTOS 6.3 or Fedora 17
 I don't use Ubuntu or any of the other flavors of Linux but I imagine these steps 
 are generally applicable to those distributions.
 </p>
-<p>These instructions assume you are performing the compliation from each of the 
-separate components: <br/>
-(a) Proteowizard and (b) the Luciphor source.
-</p>
-<p>You could also download the pre-packaged tarball at
-<a href="http://luciphor.sf.net">luciphortpp.sf.net</a>. This package contains
-an older version of Proteowizard library  but will probably compile with fewer problems.
-</p>
-
-
 <ol>
 	
 	<li>
-		Download the Proteowizard  package.<br/>
-		Go to this site:<br/>
-		<a href="http://proteowizard.sourceforge.net/downloads.shtml">http://proteowizard.sourceforge.net/downloads.shtml</a><br/>
-		In <b>Step 1</b> select <i>Source, bjam build (NO 3rd party reader support(e.g. vendors, mz5))</i><br/>
-		Then click on <b>Step 3</b> to download the file.
+		Download the Luciphor source code from this site: 
+		<a href="http://dfermin.github.com/luciphor">http://dfermin.github.com/luciphor</a><br/>
+		For this tutorial we'll assume you downloaded the tar.gz file.
 	</li>
 	
 	<li>
-		Download the Luciphor source code.<br/>
-		Go to this site: 
-		<a href="http://luciphor.sf.net">http://luciphor.sf.net</a><br/>
-		Download the <b>luciphor_src_only.tgz</b> file. 
+		Unpack the tarball. This should produce a folder named something like
+		<span id="code2">dfermin-luciphor-&lt;d0f3388&gt;</span><br/>
+		The part that reads something like <i>d0f3388</i> changes with any updates to github so this
+		part can be different in your download.
 	</li>
 	
 	<li>
-		Place both archives into the same folder. In this tutorial we will assume 
-		you put them in your home directory and that your user name is <i>wildbill</i>.
-		<div id="code">
-		mkdir -p /home/wildbill/luciphor_compile<br/>
-		cd /home/wildbill/luciphor_compile<br/>
-		ls
-		</div>
-		<br/>The 'ls -F | cat' command should print out something like this:<br/>
-		<div id="code">
-		pwiz-src-without-v-3_0_4140.tar.bz2<br/>
-		luciphor_src_only.2012Nov26.tgz
-		</div>
-		<br/>Please note that your version numbers may be different from those shown above.
-	</li>
-	
-	
-	<li>
-		Unpack the Proteowizard library.<br/>
+		Unpack and compile the Proteowizard library. The following commands should be
+		executed in order from within the dfermin-luciphor-&lt;d0f3388&gt;<br/>
 		<div id="code">
 		mkdir pwiz_root<br/>
 		mv pwiz-src-without*.bz2 pwiz_root/<br/>
 		cd pwiz_root<br/>
 		tar xjf pwiz_src_without*.bz2<br/>
 		</div>
-		<br/>The 'ls -F | cat' command should print out something like this:<br/>
+		Now we will compile Proteowizard.
+		<span id="warning"><i>WARNING: This will take a long time so be patient!</i></span><br/>
+		Within the pwiz_root folder, type:<br/>
 		<div id="code">
-			clean.bat<br/>
-			clean.sh*<br/>
-			doc/<br/>
-			example_data/<br/>
-			Jamroot.jam<br/>
-			libraries/<br/>
-			LICENSE<br/>
-			NOTICE<br/>
-			pwiz/<br/>
-			pwiz_aux/<br/>
-			pwiz-src-without-v-3_0_4140.tar.bz2<br/>
-			pwiz_tools/<br/>
-			quickbuild.bat*<br/>
-			quickbuild.sh*<br/>
-			scripts/<br/>
-			SUBSET
-		</div>
-	</li>
-
-	<li>
-	Compile Proteowizard. <span id="warning"><i>WARNING: This will take a long time so be patient!</i></span><br/>
-	Within the pwiz_root folder, type:<br/>
-	<div id="code">
-		bash quickbuild.sh
-	</div><br/>
-	If you have a computer with multiple threads you can speed up the process by typing:<br/>
-	<div id="code">
-		bash quickbuild.sh -j&ltTHREADS&gt
-	</div>
-	Where <span id="code2">&ltTHREADS&gt</span> is the number of threads 
-	you want to use for building Proteowizard.<br/>
-	<br/>
-	Now back out of the <span id="code2">pwiz_root</span> folder. 
-	You're done with the hardest part of this ordeal.
-	<div id="code">cd ..</div>
-	</li>
-
-	<li>
-		Build Luciphor.<br/>
-		<div id="code">tar xzf luciphor_src_only.*.tgz</div>
-		This should produce a folder called <span id="code2">src</span>, a 
-		a text file called <span id="code2">Jamroot.jam</span>, and a bash 
-		script called <span id="code2">compile.sh</span>. 
-		The Jamroot.jam file for Luciphor follows:<br/>
+			bash quickbuild.sh pwiz/data/msdata
+		</div><br/>
+		If you have a computer with multiple processors you can speed up the process by typing:<br/>
 		<div id="code">
-		<pre>
-exe luciphor
-	: ## sources
-		[ glob ./src/*.cpp ]
-	: ## requirements
-		<include>./pwiz_root/boost_1_43_0
-        <include>./pwiz_root/boost_1_43_0/boost
-		<include>./pwiz_root/boost_1_43_0/libs
-		<include>./pwiz_root/libraries/boost_aux
-		<include>./pwiz_root/pwiz
-		<library>./pwiz_root/pwiz_tools/common//pwiz_tools_common
-		<library>./pwiz_root/pwiz/data/msdata//pwiz_data_msdata
-		<include>./pwiz_root/pwiz/utility/misc//pwiz_utility_misc
-	: ## requirements
-		&ltwarnings&gtoff
-		&ltthreading&gtmulti
-		&lttoolset&gtgcc
-		&ltlink&gtstatic
-		#&ltcxxflags&gt ## place C++ options here (if any) 
-		&ltoptimization&gtspeed
-		&ltvariant&ltrelease
-	: ## default-build
-	;
-		</pre>
+			bash quickbuild.sh pwiz/data/msdata -j&ltTHREADS&gt
 		</div>
+		Where <span id="code2">&ltTHREADS&gt</span> is the number of processors 
+		you want to use for building Proteowizard.<br/>
 		<br/>
+		Now back out of the <span id="code2">pwiz_root</span> folder. 
+		You're done with the hardest part of this ordeal.
+		<div id="code">cd ..</div>
+	</li>
+
+	<li>
 		Assuming you compiled Proteowizard as described above. You should be able to generate
-		the final executable by running:
+		the luciphor executable by running:
 		<div id="code">
 			bash compile.sh
 		</div>
@@ -174,13 +93,16 @@ exe luciphor
 		<div id="code">
 			bash compile.sh -j&ltTHREADS&gt
 		</div>
-		<br/>With either of these two commands, compilation will take some time so
-		<span id="warning">be patient!</span><br/>
+		<br/>Compilation will take some time so <span id="warning">be patient!</span><br/>
 		If all went well, you should find an executable program called <span id="code2">luciphor</span>
-		in the current directory.
+		in the current directory.<br/>
+		For general usage instructions, execute luciphor and it will print out some (hopefully) useful information.
 	</li>
 </ol>
-
+<br/>
+If you have questions or problems please post to our discussion forum at:
+<span id="code2">luciphor-support@googlegroups.com</span>
+<br/>
 </div>
 </body>
 
