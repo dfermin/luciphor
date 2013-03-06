@@ -96,7 +96,7 @@ void print_usage() {
 		 << "   -m <0.0-1.0>              min. Peptide probability to use for parameter estimations (default is " << g_model_prob << ")\n"
 		 << "   -e <mzML, mzXML>          File extension used for reading spectral data files (default is mzXML)\n"
 		 << "   -f                        \"The Full Monty\": Report scores for all spectra not just representative ones\n"
-		 << "   -A / --Ascore             Run Gygi's Ascore algorithm instead (m/z window fixed at 0.5 for this)\n"
+		 << "   -A / --Ascore             Run our version of Ascore algorithm instead (m/z window fixed at 0.6 for this)\n"
 		 << "   -c / --capture            Capture PSM's you can't model, use the model parameters for the next closest charge state\n"
 		 << "   -Z <1,2,3...>             Only model and score spectra of the given charge state\n"
 		 << "   -o <output_file_name>     Write results to this file name (default output name is based upon input pepXML file name)\n\n"

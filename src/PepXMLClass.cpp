@@ -1313,44 +1313,7 @@ void PepXMLClass::adjustMZerr() {
 			cout << distDeque.at(i) << endl;
 		}
 		exit(0);
-
-//		sort(distDeque.begin(), distDeque.end()); // sort deque low to high
-//		N = (signed) distDeque.size();
-//
-//		i = (int) round_dbl( (alpha2*N), 0 );
-//		j = (int) round_dbl( ((1-alpha2)*N), 0 );
-//
-//		x1 = distDeque.at(i);
-//		x2 = distDeque.at(j);
-//
-//		new_mz_err = fmax( -x1, x2 );
-//
-//		mzErrMap[ curChargeState ] = round_dbl(new_mz_err, 3);
 	}
-//	else {
-//		// take the error tolerance of the previous charge state
-//		// when you lack sufficient data for the current charge state
-//		// it is assumed the user used the '-c' option to make this step work
-//		mzErrMap[ curChargeState ] = mzErrMap[ (curChargeState - 1) ];
-//	}
-//
-//	new_mz_err = mzErrMap[ curChargeState ];
-//
-//	cerr << "Z = " << curChargeState << " Calculated fragment ion tolerance: " << new_mz_err
-//		 << "  (N = " << N << ")\n";
-//
-//
-//
-//	// update the mz_err fields for all PSMs. This number will be reset back to
-//	// the default g_MZ_ERR *after* model parameter estimation is done
-//	for(int curChargeState = 2; curChargeState <= maxZ; curChargeState++) {
-//
-//		new_mz_err = mzErrMap[ curChargeState ] * 0.5;
-//
-//		// update this charge state with the new mz_err value
-//		for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++)
-//			if(curPSM->getCharge() == curChargeState) curPSM->updateMZerr( new_mz_err );
-//	}
 }
 
 
@@ -1366,5 +1329,14 @@ void PepXMLClass::resetMZerr() {
 }
 
 
-
+//// Function just prints out the number of permutations a given PSM will have
+//void PepXMLClass::getCounts() {
+//	deque<PSMClass>::iterator curPSM;
+//
+//	cout << "specId\tpeptide\tpepLen\tnumSTY\tnumPhosphoSites\tnumPerm\tnumDecoys\n";
+//	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+//		cout << curPSM->countInfo();
+//	}
+//	exit(0);
+//}
 

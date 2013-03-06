@@ -1745,6 +1745,25 @@ double PSMClass::getNumPerms() {
 }
 
 
+//// Function returns string describing parameters for permutations
+//string PSMClass::countInfo() {
+//	string ret = "";
+//	int N = (signed) peptide.length();
+//	int n = N - numPotentialSites;
+//
+//
+//	ret = specId + "\t"
+//		 + modPeptide + "\t"
+//		 + int2string(N) + "\t"
+//		 + int2string(numPotentialSites) + "\t"
+//		 + int2string(numPhosphoSites) + "\t"
+//		 + int2string(numPermutations) + "\t"
+//		 + int2string(numDecoyPermutations) + "\n";
+//
+//	return ret;
+//}
+
+
 
 // Function records all of the necessary data for computing the FLR
 // for this PSM into the passed struct
