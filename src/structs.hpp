@@ -185,7 +185,7 @@ typedef struct {
 	int numPeaksPerBin;
 	int numMatchedPeaks1;
 	int numMatchedPeaks2;
-	double negLogProb;
+	double peptideScore;
 	double maxScoreDiff;
 	string seqBest;
 	string nextSeq;

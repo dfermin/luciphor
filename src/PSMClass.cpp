@@ -12,6 +12,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <cmath>
+#include <cctype>
 #include <ctime>
 #include <set>
 #include <boost/regex.hpp>
@@ -51,7 +52,7 @@ PSMClass::PSMClass(matchDataStruct *ptr) {
 	nterm_mass = 0.0;
 	min_intensity = 0;
 	numDecoyPermutations = 0;
-
+	precursor_mass = 0;
 
 	mz_err = g_MZ_ERR * 0.5;
 	if(g_usePPM) mz_err *= PPM;
@@ -113,6 +114,8 @@ PSMClass::PSMClass(matchDataStruct *ptr) {
 		is_unambiguous = false;
 		scanNum = ptr->scanNum;
 
+		getPrecursorMass(); // compute precursor neutral mass based upon sequence of peptide
+
 		identify_STY_sites(); // record the positions of the STY characters
 
 		is_valid_phosphoPSM = true;
@@ -131,6 +134,20 @@ PSMClass::PSMClass(matchDataStruct *ptr) {
 	}
 }
 
+
+
+// Function computes the nuetral mass of the peptide assigned to this PSM
+// This is NOT the value of 'mass' which is derived directly from the TPP XML output
+void PSMClass::getPrecursorMass() {
+	int N = (signed) origModPeptide.length();
+	char c;
+	precursor_mass = H2O;
+
+	for(int i = 0; i < N; i++) {
+		c = origModPeptide.at(i);
+		precursor_mass += AAmass[ c ];
+	}
+}
 
 
 
@@ -216,11 +233,10 @@ void PSMClass::recordSpectrum(SpecStruct spec) {
 
 	delete(all_intensities); all_intensities = NULL;
 
-	//if(g_IS_HCD) deisotopeSpectrum();
+	if(g_removePrecursorNL) reduceNeutralLossPeak(); // now that you normalized the spectrum, reduce the impact of the NL peaks
 
 	normalizeSpectrum(); // scale spectrum to be in the range of 0-100
-	identifyNeutralLossPeak(); // determine if this spectrum has a neutral loss peak
-	//reduceNeutralLossPeak(); // now that you normalized the spectrum, reduce the impact of the NL peak
+
 	medianNormalizeIntensities(); // divide the intensities by their median value
 }
 
@@ -291,140 +307,108 @@ void PSMClass::medianNormalizeIntensities() {
 
 
 
-// Function determines if the spectrum contains a neutral loss peak.
-void PSMClass::identifyNeutralLossPeak() {
-	map<double, vector<double> >::iterator curPeak;
-	list<double> NL_peaks, all_peaks;
-
-	double mz, intensity;
-	double NL_mass, NL_mz;
-	double a, b;
-
-	NL_mass = mass - 97.976895;
-	NL_mz = NL_mass / (double) charge;
-	a = NL_mz - mz_err;
-	b = NL_mz + mz_err;
-
-	// first determine if the peptide contains an Serine to loose a
-	// neutral loss. If it doesn't just leave the function
-	size_t found = peptide.find("S");
-	if(found != string::npos) {
-
-		for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
-			mz = curPeak->first;
-			intensity = curPeak->second.at(1); // 0-100 scaled intensities
-			all_peaks.push_back(intensity);
-
-			// candidate neutral loss peak
-			if( (mz >= a) && (mz <= b) ) NL_peaks.push_back(intensity);
-		}
-
-		// there is at least 1 peak that might be a neutral loss peak
-		if( !NL_peaks.empty() ) {
-
-			NL_peaks.sort(); NL_peaks.reverse(); // sorted high-to-low
-			all_peaks.sort(); all_peaks.reverse(); // sorted high-to-low
-
-			deque<double> candScores;
-			list<double>::iterator L, L2;
-			double N = (signed) all_peaks.size();
-			double score = 0;
-
-			for(L = NL_peaks.begin(); L != NL_peaks.end(); L++) {
-				double i = 0;
-				for(L2 = all_peaks.begin(); L2 != all_peaks.end(); L2++) {
-
-					if( *L == *L2 ) { // found index of the current neutral loss peak
-						score = (N - i) / N;
-						candScores.push_back(score);
-					}
-					i++;
-				}
-			}
-
-			// if any of the values in candScores is > 90% (0.9) then there is a good chance
-			// that there is a neutral loss in this spectrum
-			for(int j = 0; j < (signed) candScores.size(); j++) {
-				if( candScores.at(j) > NLprob ) NLprob = candScores.at(j);
-			}
-		} // end if( !NL_peaks.empty() )
-	}
-}
-
-
-
 // Function to increase peak intensities by reducing the intensity of the neutral loss peak
 void PSMClass::reduceNeutralLossPeak() {
-
 	map<double, vector<double> >::iterator curPeak;
+	map<double, double> candPeaks, tmpSpectrum;
+	map<double, double>::iterator m;
+
+	list<double> L;
 
 	double mz, intensity;
-	double NL_mass, NL_mz, NL_a, NL_b, NL_peak_mz, NL_peak_I;
-	double orig_maxIntensity; // used to hold the "official" max. intensity value for this spectrum
-	double raw_intensity;
+	double a, b, E;
+	double orig_maxI = max_intensity;
+	double maxI = 0;
 
-	list<double> *NL_intensity_list = NULL;
-	list<double>::iterator curI;
+	double Z = (double) charge;
 
-    // For our BIMAP left bimap: k = mz , v = intensity
-    //              right bimap: k = intensity, v = mz
-    typedef boost::bimap<double,double> bm_type; // define the bimap type we will use
-    bm_type bm;
-    bm_type::right_const_iterator r_iter;
+	double precursor_MH = precursor_mass + H;  // this is the MH of the peptide
+	double precursor_mz = (precursor_mass / Z) + H;
 
-
-	NL_mass = mass - 97.976895;
-	NL_mz = NL_mass / (double) charge;
-	NL_a = NL_mz - mz_err;
-	NL_b = NL_mz + mz_err;
+	double precursor_H3PO4_mz = precursor_mz - (H3PO4/Z);
+	double precursor_H2O_mz   = precursor_mz - (H2O/Z);
+	double *massPtr = NULL;
 
 
-	NL_intensity_list = new list<double>;
+	// For debugging only
+//	if(specId == "ppeptidemix2_CID_Orbi.2022.2022.2") {
+//		cerr.precision(8);
+//		cerr << endl << specId << endl
+//			 << origModPeptide << endl
+//			 << "mass       = " << precursor_mass << endl
+//			 << "MH         = " << precursor_MH << endl
+//			 << "MH/Z       = " << precursor_mz << endl
+//			 << "MH-H3PO4/Z = " << precursor_H3PO4_mz << endl
+//			 << "MH-H2O/Z   = " << precursor_H2O_mz << endl;
+//	}
+
+
+	// only peptides with an S or T can lose a phosphate so check this peptide sequence
+	// for the required residues
+	int STctr = 0;
+	bool hasST = false;
+	for(int i = 0; i < (signed)origModPeptide.length(); i++) {
+		if( tolower( origModPeptide.at(i) ) == 's' ) STctr++;
+		if( tolower( origModPeptide.at(i) ) == 't' ) STctr++;
+	}
+	if(STctr > 0) hasST = true;
+
+
+
+	// copy raw spectrum to temporary map for this function
 	for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
 		mz = curPeak->first;
-		intensity = curPeak->second.at(1); // 0-100 scaled intensities
+		intensity = curPeak->second.at(0); // raw intensities
 
-		if( (mz >= NL_a) && (mz <= NL_b) ) {
-			bm.insert( bm_type::value_type(mz, intensity) );
-			NL_intensity_list->push_back(intensity);
+		E = runif() * 1/10000; // random noise to make unique peak intensities.
+		tmpSpectrum[ mz ] = intensity + E;
+	}
+
+
+	for(int i = 0; i < 2; i++) {
+
+		if(i == 0) massPtr = &precursor_H3PO4_mz;
+		else massPtr = &precursor_H2O_mz;
+
+		if(!hasST) continue; // skip H3PO4, this peptide won't have this neutral loss
+
+		// prepare for next iteration
+		candPeaks.clear();
+		L.clear();
+		maxI = 0;
+
+		for(m = tmpSpectrum.begin(); m != tmpSpectrum.end(); m++) {
+			mz = m->first;
+			intensity = m->second;
+
+			a = *massPtr - mz_err;
+			b = *massPtr + mz_err;
+
+			if( (mz >= a) && (mz <= b) ) {
+				candPeaks[ intensity ] = mz;
+				L.push_back(intensity);
+			}
+		}
+
+		if( !candPeaks.empty() ) { // there is at least 1 candidate peak
+			L.sort(); // low to high
+			maxI = L.back(); // most intense peak observed in candPeaks
+
+			mz = candPeaks[ maxI ];
+			raw_spectrum.erase( mz );
 		}
 	}
 
-	if( !NL_intensity_list->empty() ) { // a potential neutral loss peak was found
-		NL_intensity_list->sort(); // sorted low to high
-		NL_peak_I = NL_intensity_list->back(); // most intense candidate NL peak in list
-
-		r_iter = bm.right.find( NL_peak_I );
-		NL_peak_mz = r_iter->second; // get the m/z for this peak
-
-		curPeak = raw_spectrum.find(NL_peak_mz);
-		raw_intensity = curPeak->second.at(0);
-
-		//raw_spectrum.erase(curPeak);
-		raw_spectrum[NL_peak_mz].at(0) = 0;
-		raw_spectrum[NL_peak_mz].at(1) = 0;
-		raw_spectrum[NL_peak_mz].at(2) = 0;
-
-
-
-		// since we deleted this peak we need to recompute the new max_intensity
-		// for the spectrum.
-		orig_maxIntensity = max_intensity;
-		recordMaxIntensity(); // record the NEW max intensity value for the spectrum
-
-		normalizeSpectrum(); // scale spectrum again to be in the range of 0-100
-
-		//re-insert the NL peak
-		raw_spectrum[NL_peak_mz].at(0) = raw_intensity;
-		raw_spectrum[NL_peak_mz].at(1) = NL_peak_I;
-		raw_spectrum[NL_peak_mz].at(2) = 0;
-
-		max_intensity = orig_maxIntensity; // restore the original max_intensity value
+	// need to record the new maximum intensity in spectrum
+	maxI = 0;
+	for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
+		intensity = curPeak->second.at(0); // raw intensities
+		if(intensity > maxI) maxI = intensity;
 	}
-	bm.clear();
-	delete(NL_intensity_list); NL_intensity_list = NULL;
-}
 
+	max_intensity_orig = max_intensity;
+	max_intensity = maxI;
+}
 
 
 
@@ -510,27 +494,31 @@ void PSMClass::writeAscoreSpectrum() {
 	string ionSeq;
 	double mz, intensity;
 	double norm_intensity;
+	map<double, double> Aspectrum;
+	map<double, double>::iterator m;
 	map<double, vector<double> >::iterator curPeak;
 	map<double, peakStruct>::iterator ascoreIter;
 	peakType = g_intensityType - 1;
+	AscoreClass *A = NULL;
 
+	A = new AscoreClass( afs.seqBest, charge, nterm_mass );
+	A->assignSpectrumMap( &raw_spectrum );
+	Aspectrum = A->getRawSpectrum();
 
 	out << "mz\tI\tion\n";
 
-	for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
-		mz = curPeak->first;
-		intensity = curPeak->second.at(peakType);
+
+	for(m = Aspectrum.begin(); m != Aspectrum.end(); m++) {
+		mz = m->first;
+		intensity = m->second;
+
+		if(g_intensityType == 1) intensity = (m->second / 100.0) * max_intensity;
 
 		out << mz << "\t" << intensity << "\t";
 
-		ascoreIter = ascoreMatchedSpectrum1.find( round_dbl(mz, 0) );
+		ascoreIter = ascoreMatchedSpectrum1.find( mz );
 		if(ascoreIter != ascoreMatchedSpectrum1.end()) {
-
-			if(g_intensityType == 2) {
-				if(ascoreIter->second.norm_intensity == intensity) out << ascoreIter->second.ionStr;
-			}
-			else if(ascoreIter->second.intensity == intensity) out << ascoreIter->second.ionStr;
-			//out << ascoreIter->second.ionStr;
+			if( !ascoreIter->second.ionStr.empty() ) out << ascoreIter->second.ionStr;
 		}
 		out << endl;
 	}
@@ -859,8 +847,6 @@ void PSMClass::calcScore() {
 			status = curMSProduct->assignSpectrumMap( *spectrum ); // spectrum should point to QN_spectrum map
 			if(g_usePPM) curMSProduct->calc_ppm_err();
 
-			if(g_useOnlySiteDetermIons) curMSProduct->makeSiteDetermIons();
-
 			if(status) {
 				cerr << "ERROR: MSProductClass.assignSpectrumMap() spectrum assignment failed.\n"
 					 << specId << " has no spectrum map assigned to it.\n"
@@ -907,6 +893,7 @@ void PSMClass::pickScores(deque<scoreStruct> &v) {
 	deque<scoreStruct>::iterator curScore;
 	list<double> score_list;
 	list<double>::iterator L_iter;
+	set<string> ions1, ions2; // for using only site determining ions
 	scoreStruct *bestScoreStruct = NULL;
 	scoreStruct *nextBestScoreStruct = NULL;
 	double best_score = 0.0;
@@ -985,6 +972,12 @@ void PSMClass::pickScores(deque<scoreStruct> &v) {
 	delete(nextBestScoreStruct); nextBestScoreStruct = NULL;
 
 
+
+	if(g_useOnlySiteDetermIons) {
+		getSiteDeterminingIons(bestScore_final.seq, nextBestScore_final.seq, ions1, ions2);
+	}
+
+
 	/*
 	 * Best scoring Permutation
 	 */
@@ -992,7 +985,7 @@ void PSMClass::pickScores(deque<scoreStruct> &v) {
 	bestMatch->updateMZerr(mz_err);
 	bestMatch->assignSpectrumMap( *spectrum );
 
-	if(g_useOnlySiteDetermIons) bestMatch->makeSiteDetermIons();
+	if(g_useOnlySiteDetermIons) bestMatch->keepOnlySiteDetermIons(ions1);
 
 	Mptr = new map<double, peakStruct>();
 	bestMatch->getMatchedPeaks(Mptr);
@@ -1013,7 +1006,7 @@ void PSMClass::pickScores(deque<scoreStruct> &v) {
 	bestMatch->updateMZerr(mz_err);
 	bestMatch->assignSpectrumMap( *spectrum );
 
-	if(g_useOnlySiteDetermIons) bestMatch->makeSiteDetermIons();
+	if(g_useOnlySiteDetermIons) bestMatch->keepOnlySiteDetermIons(ions2);
 
 	Mptr = new map<double, peakStruct>();
 	bestMatch->getMatchedPeaks(Mptr);
@@ -1066,6 +1059,7 @@ void PSMClass::write_results(ofstream &outf) {
 		double delta_score = 0;
 		int N = (signed) raw_spectrum.size();
 
+
 		delta_score = bestScore_final.score - nextBestScore_final.score;
 
 		// If this PSM represents a peptide where all potential sites are
@@ -1079,44 +1073,27 @@ void PSMClass::write_results(ofstream &outf) {
 		if( isDecoyPep( &bestScore_final.seq ) ) isDecoy1 = 1;
 		if( isDecoyPep( &nextBestScore_final.seq ) ) isDecoy2 = 1;
 
-		string tmp;
-		if(nterm_mass > 0.0) { // nterminal modification is present
-			tmp = "n_" + origModPeptide;
-			origModPeptide = tmp;
-			tmp.clear();
-
-			tmp = "n_" + bestScore_final.seq;
-			bestScore_final.seq = tmp;
-			tmp.clear();
-
-			tmp = "n_" + nextBestScore_final.seq;
-			nextBestScore_final.seq = tmp;
-			tmp.clear();
-		}
-
 
 		if(g_FULL_MONTY) {
 			outf << specId << "\t"
 				 << peptide << "/+" << charge << "\t"
-				 << repModAAchar( &bestScore_final.seq ) << "\t"
-				 << repModAAchar( &nextBestScore_final.seq ) << "\t"
+				 << repModAAchar( &bestScore_final.seq, nterm_mass ) << "\t"
+				 << repModAAchar( &nextBestScore_final.seq, nterm_mass ) << "\t"
 				 << iniProb << "\t"
 				 << numPhosphoSites << "\t"
 				 << numPotentialSites << "\t";
 
-			if(isDecoy1 == 1) outf << "NA\tNA\tNA\t";
+			//if(isDecoy1 == 1) outf << "NA\tNA\tNA\t";
+			if(isDecoy1 == 1) outf << "NA\tNA\t";
 			else {
-				outf << luciphorProb << "\t"
-					 << localFLR << "\t"
+				//outf << luciphorProb << "\t"
+				outf << localFLR << "\t"
 					 << globalFLR << "\t";
 			}
 
 			outf << delta_score << "\t"
 				 << bestScore_final.score << "\t"
 				 << nextBestScore_final.score << "\t"
-
-				// << NLprob << "\t" // report neutral loss probability
-
 				 << isDecoy1 << "\t"
 				 << isDecoy2 << "\t"
 				 << N << "\t"
@@ -1129,18 +1106,18 @@ void PSMClass::write_results(ofstream &outf) {
 		}
 		else { // default output
 			outf << specId << "\t"
-				 << repModAAchar( &origModPeptide ) << "\t"
-				 << repModAAchar( &bestScore_final.seq ) << "\t"
-				 << repModAAchar( &nextBestScore_final.seq ) << "\t"
+				 << repModAAchar( &origModPeptide, nterm_mass ) << "\t"
+				 << repModAAchar( &bestScore_final.seq, nterm_mass ) << "\t"
+				 << repModAAchar( &nextBestScore_final.seq, nterm_mass ) << "\t"
 				 << iniProb << "\t"
 				 << numSupportingSpectra << "\t"
 				 << numPhosphoSites << "\t"
 				 << numPotentialSites << "\t";
 
-			if(isDecoy1 == 1) outf << "NA\tNA\tNA\t";
+
+			if(isDecoy1 == 1) outf << "NA\tNA\t";
 			else {
-				outf << luciphorProb << "\t"
-					 << localFLR << "\t"
+				outf << localFLR << "\t"
 					 << globalFLR << "\t";
 			}
 
@@ -1215,26 +1192,36 @@ void PSMClass::runAscore() {
 	double maxScore = 0.0, negLogProb = 0.0;
 	int peakDepth = 0;
 	int optimalPeakDepth = 0;
-	int numIons = 0;
 	double pepScore1, pepScore2;
-	double delta, mz, intensity, ps;
+	double delta, mz, intensity, ps, diff;
 
-	vector<double> pep1vec(10,0);
-	vector<double> pep2vec(10,0);
-	vector<double> scoreDiff(10,0);
-	list<double> pepScoreList;
-	map<double, int> deltaMap;
-	map<double, int>::iterator deltaIter;
-	map<string, double> ascoreFinalMap;
-	map<double, double> *spectrum = NULL;
-	map<double, vector<double> >::iterator curPeak;
-	map<double, deque<string> > scoreMap;
-	map<double, deque<string> >::iterator scoreMapIter;
+	ofstream ascoreDebugF;
+
+	map<string, deque<double> > scoreMap;
+	map<string, deque<double> >::iterator smIter;
+	map<string, double> deltaMap;
+	map<string, double>::iterator dmIter;
+	list<double> L, L2;
+
+
+	if(g_DEBUG_MODE) {
+		// open the debug file for writing and generate the header line
+		if( !fileExists("ascore_peak_data.debug") ) {
+			ascoreDebugF.open("ascore_peak_data.debug", ios::out);
+			ascoreDebugF << "specId\tpermutation\t";
+			for(int i = 1; i < 11; i++) ascoreDebugF << "d" << i << "\t";
+			ascoreDebugF << "class\n";
+		}
+		else {
+			ascoreDebugF.open("ascore_peak_data.debug", ios::app);
+		}
+	}
+
 
 
 	// initialize afs struct of this object for receiving final output
 	afs.maxScoreDiff = 0;
-	afs.negLogProb = 0;
+	afs.peptideScore = 0;
 	afs.nextSeq = "";
 	afs.numMatchedPeaks1 = 0;
 	afs.numMatchedPeaks2 = 0;
@@ -1242,184 +1229,195 @@ void PSMClass::runAscore() {
 	afs.seqBest = "";
 
 
-	// store the relevant peak type into a new map that is passed to the curMSProduct object
-	spectrum = new map<double, double>;
-	for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
-		mz = curPeak->first;
-		intensity = curPeak->second.at(peakType);
-		spectrum->insert( pair<double, double>(mz, intensity) );
-	}
-
-	/*
-	 * Calculate the Peptide Score as described in Gygi's paper.
-	 * The PeptideScore tells you which two phospho-permutations are the top
-	 * candidates to be subjected to Ascoring.
-	 */
+	// Calculate the Peptide Score as described in Gygi's paper.
+	// The PeptideScore tells you which two phospho-permutations are the top
+	// candidates to be subjected to Ascoring.
 	for(curPermutation = phosphoVersionSet.begin(); curPermutation != phosphoVersionSet.end(); curPermutation++) {
 		curSeq = *curPermutation;
 		curAS = new AscoreClass(curSeq, charge, nterm_mass);
-		curAS->assignSpectrumMap( *spectrum );
-		curAS->recordMZrange();
-		ps = curAS->getPeptideScore();
+		curAS->assignSpectrumMap( &raw_spectrum );
 
-		scoreMap[ ps ].push_back(curSeq);
-		pepScoreList.push_back(ps);
+		scoreMap[ curSeq ] = curAS->getPeptideScore();
 
 		delete(curAS); curAS = NULL;
 	}
 
+	// Now get the best score, the permutation that goes with it,
+	// and the optimal peak depth based upon the data in scoreMap
+	for(smIter = scoreMap.begin(); smIter != scoreMap.end(); smIter++) {
 
-	N = (signed) pepScoreList.size(); // get number of scores observed
+		for(int i = 0; i < 10; i++) { // find the best score and the peak depth it occurs at
 
-	if(N == 1) { // this is an unambiguous case and there is no second best permutation
-		         // take the value of 'pepScore1' to be the ascore for this PSM
-
-		pepScore1 = pepScoreList.front();
-
-		scoreMapIter = scoreMap.find(pepScore1);
-		pepSeq1 = scoreMapIter->second.at(0);
-
-		curAS = new AscoreClass(pepSeq1, charge, nterm_mass);
-		curAS->assignSpectrumMap( *spectrum );
-		curAS->recordMZrange();
-
-		// identify the max peak depth
-		double maxScore = 0;
-		int maxScoreIdx = 0;
-		for(int i = 1; i <= 10; i++) {
-			delta = curAS->getFinalAscore(i);
-			if( delta > maxScore ) {
-				maxScore = delta;
-				maxScoreIdx = i;
+			if( smIter->second.at(i) > maxScore ) {
+				maxScore = smIter->second.at(i); // record best peptideScore
+				optimalPeakDepth = i;            // record optimal peak depth
+				pepSeq1 = smIter->first;         // record best permutation
 			}
 		}
-
-		delta = curAS->getFinalAscore( maxScoreIdx );
-		afs.negLogProb = delta;
-		afs.numPeaksPerBin = maxScoreIdx;
-		ascoreMatchedSpectrum1 = curAS->getMatchedSpectrumMap();
-		afs.numMatchedPeaks1 = (signed) ascoreMatchedSpectrum1.size();
-
-		afs.maxScoreDiff = afs.negLogProb;
-		afs.seqBest = pepSeq1;
-		afs.nextSeq = "";
-		afs.numMatchedPeaks2 = 0;
-
-		delete(curAS);
 	}
-	else { // identify the top two permutations that have the highest PeptideScores
 
-		pepScoreList.sort(); // sorted low to high
-		pepScoreList.reverse(); // sorted low to high
+	///////////////////////////////////////////////////////////////////////////
+	/// Special Case!
+	///////////////////////////////////////////////////////////////////////////
+	// if this is a peptide that is unambigous (meaning # of STY == # phospho-sites)
+	// then this function ends here.
+	if(is_unambiguous) {
+		afs.maxScoreDiff = 1000;
+		afs.peptideScore = maxScore;
+		afs.numPeaksPerBin = optimalPeakDepth;
 
-		pepScore1 = pepScoreList.front();
-		pepScoreList.pop_front();
-		pepScore2 = pepScoreList.front();
+		afs.seqBest = pepSeq1;
+		if(pepSeq1.length() == 0) afs.seqBest = origModPeptide;
 
-		afs.negLogProb = pepScore1; // the "PeptideScore" as described by Gygi
-
-		/*
-		 * Because of the way Ascore works, two different phospho-permutations
-		 * can have the exact same score. For this reason we use the 'scoreMap'
-		 * object to find all of the candidate permutations with the top 2 scores.
-		 */
-		pepSeq1.clear();
-		pepSeq2.clear();
-
-		scoreMapIter = scoreMap.find(pepScore1);
-		int numSeqs  = (signed) scoreMapIter->second.size();
-
-		if(numSeqs > 1) { // more than 1 sequence go the same top score
-			pepSeq1 = scoreMapIter->second.at(0);
-			pepSeq2 = scoreMapIter->second.at(1);
-		}
-		else { // at least two distinct scores can be extracted from the map
-			pepSeq1 = scoreMapIter->second.at(0);
-
-			scoreMapIter = scoreMap.find(pepScore2);
-			pepSeq2 = scoreMapIter->second.at(0);
-		}
-
-		/*
-		 * At this point you only have to deal with 2 phospho-permutations, the two
-		 * with the highest peptide scores.
-		 */
-		// pepSeq 1
-		curAS = new AscoreClass(pepSeq1, charge, nterm_mass);
-		curAS->assignSpectrumMap( *spectrum );
-		curAS->recordMZrange();
-		pep1vec = curAS->getPeptideScoreVec();
-		delete(curAS);
-
-		// pepSeq 2
-		curAS = new AscoreClass(pepSeq2, charge, nterm_mass);
-		curAS->assignSpectrumMap( *spectrum );
-		curAS->recordMZrange();
-		pep2vec = curAS->getPeptideScoreVec();
-		delete(curAS);
-
-		// identify the maximum absolute difference between elements of pep1vec and pep2vec
-		for(int i = 0; i < 10; i++) {
-			delta = fabs( pep1vec.at(i) - pep2vec.at(i) );
-			deltaMap[ delta ] = i;  // k = diff, v = peak depth
-			scoreDiff.at(i) = delta;
-		}
-
-		sort(scoreDiff.begin(), scoreDiff.end());  //sorted low to high
-		delta = scoreDiff.at(9); // last element
-		deltaIter = deltaMap.find(delta);
-		optimalPeakDepth = deltaIter->second + 1;
-
-
-		// pepSeq 1 final ascore
-		curAS = new AscoreClass(pepSeq1, charge, nterm_mass);
-		curAS->assignSpectrumMap( *spectrum );
-		curAS->recordMZrange();
-		numIons = curAS->getSiteDetermIons();
-		pepScore1 = curAS->getFinalAscore(optimalPeakDepth);
+		curAS = new AscoreClass(afs.seqBest, charge, nterm_mass);
+		curAS->assignSpectrumMap( &raw_spectrum );
+		curAS->getFinalAscore( (optimalPeakDepth + 1) ); // need a number between 1-10
 
 		ascoreMatchedSpectrum1 = curAS->getMatchedSpectrumMap();
 		afs.numMatchedPeaks1 = (signed) ascoreMatchedSpectrum1.size();
 		delete(curAS); curAS = NULL;
 
-
-		// pepSeq 2 final ascore
-		curAS = new AscoreClass(pepSeq2, charge, nterm_mass);
-		curAS->assignSpectrumMap( *spectrum );
-		curAS->recordMZrange();
-		curAS->getSiteDetermIons();
-		pepScore2 = curAS->getFinalAscore(optimalPeakDepth);
-		ascoreMatchedSpectrum2 = curAS->getMatchedSpectrumMap();
-		afs.numMatchedPeaks2 = (signed) ascoreMatchedSpectrum2.size();
-		delete(curAS); curAS = NULL;
-
-		// Get final Ascore values
-		afs.numPeaksPerBin = optimalPeakDepth;
-		afs.seqBest = pepSeq1;
-		afs.nextSeq = pepSeq2;
-		afs.maxScoreDiff = fabs(pepScore1 - pepScore2);
+		return; // leave function now for this PSM
+	}
+	///////////////////////////////////////////////////////////////////////////
+	/// END Special Case!
+	///////////////////////////////////////////////////////////////////////////
 
 
-		if(g_DEBUG_MODE) {
-			cerr << "\n## PSMClass::runAscore():\n"
-				 << "PeptideScore:   " << afs.negLogProb << endl
-				 << "Peptide 1:      " << afs.seqBest << endl
-				 << "Peptide 2:      " << afs.nextSeq << endl
-				 << "Score 1:        " << pepScore1 << endl
-				 << "Score 2:        " << pepScore2 << endl
-				 << "Peak Depth:     " << afs.numPeaksPerBin << endl
-				 << "Matched Pks 1:  " << afs.numMatchedPeaks1 << endl
-				 << "Mathced Pks 2:  " << afs.numMatchedPeaks2 << endl
-				 << "Ascore:         " << afs.maxScoreDiff << endl;
+	///////////////////////////////////////////////////////////////////////////
+	/// Special Case!
+	///////////////////////////////////////////////////////////////////////////
+	// This happens when you can't match a single fragment ion at a peak depth
+	// between 1 and 10. This is *NOT* to say there isn't a matchable peak
+	// in the spectrum. We just can't observe one using the peak depth limits
+	// of Ascore (ie: 1-10)
+	if( (maxScore == 0) || (pepSeq1.length() == 0) ) {
+		afs.maxScoreDiff = 0;
+		afs.peptideScore = maxScore;
+		afs.seqBest = origModPeptide;
+		afs.numPeaksPerBin = 10;
+
+		return; // leave function now for this PSM
+	}
+	///////////////////////////////////////////////////////////////////////////
+	/// END Special Case!
+	///////////////////////////////////////////////////////////////////////////
+
+
+	// If you got this far, then you are dealing with a PSM that is ambiguous
+	// and has some matched peaks
+
+	// Now find the 2nd best scoring permutation
+	L2.clear(); // holds best scores for all other permutations at any peak depth
+	for(smIter = scoreMap.begin(); smIter != scoreMap.end(); smIter++) {
+		if(smIter->first == pepSeq1) continue; // disregard the best scoring permutation
+
+		L.clear();
+		for(int i = 0; i < 10; i++) {
+			L.push_back( smIter->second.at(i) ); // score at peak-depth 'i'
 		}
 
-	} //end else
+		L.sort();
+		ps = L.back(); // max value for this permutation, peak-depth unknown
+		deltaMap[ smIter->first ] = ps;
+		L2.push_back( ps );
+	}
+
+	L2.sort();
+	ps = L2.back(); // max value from among all permutations
+	for(dmIter = deltaMap.begin(); dmIter != deltaMap.end(); dmIter++) {
+		if(dmIter->second == ps) {
+			pepSeq2   = dmIter->first;
+			pepScore2 = dmIter->second;
+		}
+	}
+
+
+
+
+//	// Now find the 2nd best scoring permutation
+//	L.clear();
+//	for(smIter = scoreMap.begin(); smIter != scoreMap.end(); smIter++) {
+//		if( smIter->first == pepSeq1 ) continue; // disregard the best permutation.
+//
+//		for(int i = 0; i < 10; i++) {
+//			delta = maxScore - smIter->second.at( i );
+//			L.push_back(delta);
+//		}
+//	}
+//	L.sort();
+//	delta = L.front(); // smallest difference between maxScore and 2nd best score
+//					   // regardless of what peak depth the second permutation is at
+//
+//
+//	// identify the permutation that goes with this 2nd best score
+//	for(smIter = scoreMap.begin(); smIter != scoreMap.end(); smIter++) {
+//		if( smIter->first == pepSeq1 ) continue; // disregard the best permutation.
+//
+//		for(int i = 0; i < 10; i++) {
+//			diff = maxScore - smIter->second.at(i);
+//
+//			if(delta == diff) { // you've found the 2nd best match
+//				pepSeq2   = smIter->first;
+//				pepScore2 = smIter->second.at(i);
+//				break;
+//			}
+//		}
+//	}
+
+
+	// for debugging print out the peptide scores for all permutations at every peak depth
+	if(g_DEBUG_MODE) {
+		for(smIter = scoreMap.begin(); smIter != scoreMap.end(); smIter++) {
+			ascoreDebugF << specId << "\t" << smIter->first << "\t";
+			for(int i = 0; i < 10; i++) {
+				ascoreDebugF << smIter->second.at(i) << "\t";
+			}
+			if(smIter->first == pepSeq1) ascoreDebugF << "1";
+			if(smIter->first == pepSeq2) ascoreDebugF << "2";
+			ascoreDebugF << endl;
+		}
+		if(ascoreDebugF.is_open()) ascoreDebugF.close();
+	}
+
+
+	set<string> ions1, ions2;
+	getSiteDeterminingIons(pepSeq1, pepSeq2, ions1, ions2);
+
+	// pepSeq 1 final ascore
+	curAS = new AscoreClass(pepSeq1, charge, nterm_mass);
+	curAS->assignSpectrumMap( &raw_spectrum );
+	curAS->recordSiteDetermIons(ions1);
+	pepScore1 = curAS->getFinalAscore( (optimalPeakDepth + 1) ); // need a number between 1-10
+
+	ascoreMatchedSpectrum1 = curAS->getMatchedSpectrumMap();
+	afs.numMatchedPeaks1 = (signed) ascoreMatchedSpectrum1.size();
+	delete(curAS); curAS = NULL;
+
+
+	// pepSeq 2 final ascore
+	curAS = new AscoreClass(pepSeq2, charge, nterm_mass);
+	curAS->assignSpectrumMap( &raw_spectrum );
+	curAS->recordSiteDetermIons(ions2);
+	pepScore2 = curAS->getFinalAscore( (optimalPeakDepth + 1) ); // need a number between 1-10
+	ascoreMatchedSpectrum2 = curAS->getMatchedSpectrumMap();
+	afs.numMatchedPeaks2 = (signed) ascoreMatchedSpectrum2.size();
+	delete(curAS); curAS = NULL;
+
+	// Get final Ascore values
+	afs.peptideScore = maxScore;
+	afs.numPeaksPerBin = (optimalPeakDepth + 1);
+	afs.seqBest = pepSeq1;
+	afs.nextSeq = pepSeq2;
+	afs.maxScoreDiff = fabs(pepScore1 - pepScore2);
 
 
 	g_progressCtr++;
 	if(g_progressCtr % 100 == 0 ) cerr << g_progressCtr << " ";
 	if(g_progressCtr % 1000 == 0 ) cerr << endl;
 }
+
+
 
 
 // Function writes Ascore results to disk
@@ -1429,37 +1427,16 @@ void PSMClass::write_ascore_results(ofstream &outf) {
 	// this line handles unambiguous cases.
 	if(afs.nextSeq.length() == 0) afs.nextSeq = afs.seqBest;
 
-	if(nterm_mass > 0.0) { // nterminal modification is pressent
-		tmp = "n_" + origModPeptide;
-		origModPeptide = tmp;
-		tmp.clear();
-
-		tmp = "n_" + afs.seqBest;
-		afs.seqBest = tmp;
-		tmp.clear();
-
-		if(afs.nextSeq.length() > 0) {
-			tmp = "n_" + afs.nextSeq;
-			afs.nextSeq = tmp;
-			tmp.clear();
-		}
-	}
-
-//	if( isDecoyPep( &afs.seqBest ) ) isDecoy1 = 1;
-//	if( isDecoyPep( &afs.nextSeq ) ) isDecoy2 = 1;
-
 	outf << specId << "\t"
-		 << repModAAchar( &origModPeptide ) << "/+" << charge << "\t"
-		 << repModAAchar( &afs.seqBest ) << "\t"
-		 << repModAAchar( &afs.nextSeq ) << "\t"
+		 << repModAAchar( &origModPeptide, nterm_mass ) << "/+" << charge << "\t"
+		 << repModAAchar( &afs.seqBest, nterm_mass ) << "\t"
+		 << repModAAchar( &afs.nextSeq, nterm_mass ) << "\t"
 		 << iniProb << "\t"
 		 << numPhosphoSites << "\t"
 		 << numPotentialSites << "\t"
 		 << afs.numPeaksPerBin << "\t"
-		 << afs.negLogProb << "\t"
-		 << afs.maxScoreDiff << "\t"
-//		 << isDecoy1 << "\t"
-//		 << isDecoy2 << "\t"
+		 << afs.peptideScore << "\t"
+		 << afs.maxScoreDiff << "\t" // Ascore
 		 << (signed) raw_spectrum.size() << "\t"
 		 << afs.numMatchedPeaks1 << "\t"
 		 << afs.numMatchedPeaks2 << "\n";
@@ -1530,6 +1507,7 @@ void PSMClass::recordBestSpectrumScores(int J) {
 			log_prob_M = log_gaussianProb(muM, varM, intensity);
 			log_prob_U = log_gaussianProb(muU, varU, intensity);
 			Iscore = log_prob_M - log_prob_U;
+			if(dbl_isnan(Iscore) || isInfinite(Iscore) ) Iscore = 0;
 			ptr->IscoreMap[ ionSeq ] = Iscore;
 
 			/*
@@ -1538,10 +1516,10 @@ void PSMClass::recordBestSpectrumScores(int J) {
 			log_dist_M = log_laplaceProb(muM_d, varM_d, mzDist);
 			log_dist_U = log_uniformProb(-mz_err, mz_err);
 			Dscore = log_dist_M - log_dist_U;
+			if(dbl_isnan(Dscore) || isInfinite(Dscore) ) Dscore = 0;
 			ptr->DscoreMap[ ionSeq ] = Dscore;
 
-			double intense_wt = 1.0 / ( 1.0 + exp(-Iscore) );
-			x = intense_wt * Dscore;
+			x = Iscore + Dscore;
 		}
 		else { // for CID data
 			/*
@@ -1550,6 +1528,7 @@ void PSMClass::recordBestSpectrumScores(int J) {
 			log_prob_M = log_gaussianProb(muM, varM, intensity);
 			log_prob_U = log_gaussianProb(muU, varU, intensity);
 			Iscore = log_prob_M - log_prob_U;
+			if(dbl_isnan(Iscore) || isInfinite(Iscore) ) Iscore = 0;
 			ptr->IscoreMap[ ionSeq ] = Iscore;
 
 			/*
@@ -1558,9 +1537,13 @@ void PSMClass::recordBestSpectrumScores(int J) {
 			log_dist_M = log_gaussianProb(muM_d, varM_d, mzDist);
 			log_dist_U = log_gaussianProb(muU_d, varU_d, mzDist);
 			Dscore = log_dist_M - log_dist_U;
+			if(dbl_isnan(Dscore) || isInfinite(Dscore) ) Dscore = 0;
 			ptr->DscoreMap[ ionSeq ] = Dscore;
 
-			double intense_wt = 1.0 / ( 1.0 + exp(-Iscore) );
+			double intense_wt = 0;
+			if(dbl_isnan(Iscore) || isInfinite(Iscore) ) intense_wt = 0;
+			else intense_wt = 1.0 / ( 1.0 + exp(-Iscore) );
+
 			x = intense_wt * Dscore;
 		}
 
@@ -1582,61 +1565,7 @@ void PSMClass::threaded_recordModelingParameters_matched() {
 	setSpectrumPtr("median");
 	generatePermutations();
 	classifyPeaks();
-
-/**************
-	if( use_for_model ) {
-
-		X.clear();
-		X = getIntensities('m', 'y');
-		X.unique();
-		for(L = X.begin(); L != X.end(); L++) M_ints_y.push_back(*L);
-
-		X.clear();
-		X = getIntensities('m', 'b');
-		X.unique();
-		for(L = X.begin(); L != X.end(); L++) M_ints_b.push_back(*L);
-
-		X.clear();
-		X = getDistances('m', 'y');
-		X.unique();
-		for(L = X.begin(); L != X.end(); L++) M_dist_y.push_back(*L);
-
-		X.clear();
-		X = getDistances('m', 'b');
-		X.unique();
-		for(L = X.begin(); L != X.end(); L++) M_dist_b.push_back(*L);
-
-	}
-*****************/
 }
-
-
-
-
-/*********************************
-// Function to be passed to a threadpool and executed for each charge state
-void PSMClass::threaded_recordModelingParameters_UNmatched() {
-	list<double> X;
-	list<double>::iterator L;
-
-	setSpectrumPtr("median");
-
-	if( use_for_model ) {
-		X.clear();
-		X = getIntensities('u', 'u');
-		X.unique();
-		for(L = X.begin(); L != X.end(); L++) U_ints_local.push_back(*L);
-
-
-		X.clear();
-		X = getDistances('u', 'u');
-		X.unique();
-		for(L = X.begin(); L != X.end(); L++) U_dist_local.push_back(*L);
-	}
-
-}
-*******************************/
-
 
 
 
@@ -1672,31 +1601,6 @@ list<double>* PSMClass::getParamList(char matchType, char ionType, char dataType
 
 
 
-// Function returns pointer to the requested parameter list
-// The pointer is constant so the data cannot be written to, only read from
-//list<double>* PSMClass::getParamList(char matchType, char ionType, char dataType) {
-//	list<double> *retPtr = NULL;
-//
-//	if(dataType == 'i') { // intensity
-//		if(matchType == 'm') {
-//			if(ionType == 'b') retPtr = &M_ints_b;
-//			else if(ionType == 'y') retPtr = &M_ints_y;
-//		}
-//		else retPtr = &U_ints_local;
-//	}
-//	else if(dataType == 'd') { // distance
-//		if(matchType == 'm') {
-//			if(ionType == 'b') retPtr = &M_dist_b;
-//			else if(ionType == 'y') retPtr = &M_dist_y;
-//		}
-//		else retPtr = &U_dist_local;
-//	}
-//
-//	return retPtr;
-//}
-
-
-
 
 // Function to be passed to a threadpool and executed for each charge state
 void PSMClass::threaded_scorePSM() {
@@ -1723,7 +1627,6 @@ void PSMClass::calcNumDecoyPermutations() {
 	for(int i = 0; i < seqLen; i++) {
 		c = seq.at(i);
 		if( (c != 'S') && (c != 'T') && (c != 'Y') && (c != 'X') && ( !islower(c) ) ) N++;
-		//if( (c != 'S') && (c != 'T') && (c != 'Y') && (c != 'X') ) N++;
 	}
 
 	if( N >= numPotentialSites ) { // you have enough non-STY residues to make a decoy peptide
@@ -1770,6 +1673,7 @@ double PSMClass::getNumPerms() {
 flrStruct PSMClass::getFLRdata() {
 	double deltaScore = bestScore_final.score - nextBestScore_final.score;
 	flrStruct ret;
+
 	ret.specId = specId;
 	ret.deltaScore = deltaScore;
 	ret.isDecoy = isDecoyPep( &bestScore_final.seq );
@@ -1864,56 +1768,54 @@ void PSMClass::randomizeSeq() {
 }
 
 
-
-
 // Perform deisotoping of spectrum
-void PSMClass::deisotopeSpectrum() {
-	map<double, double> peakClass; // k = an observed peak, v = it's monoisotopic parent (if any)
-	map<double, vector<double> >::iterator curPeak;
-	deque<double> mzValues;
-	double curMZ, obs_mz, delta, theo_mz;
-	const double DA_ERR = 0.01; // about 10ppm
-	int N = 0;
-
-	for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
-		curMZ = curPeak->first;
-		mzValues.push_back(curMZ);
-		peakClass[ curMZ ] = 0; // a zero value here means the peak is not assigned to a monoisotopic parent
-	}
-
-	N = (signed) mzValues.size();
-	sort( mzValues.begin(), mzValues.end() ); // sort m/z values from low to high
-
-	for(double z = 1; z < 3; z++) { // assume isotopic peaks up to charge states of 2;
-
-		for(int i = 0; i < N; i++) {
-			curMZ = mzValues.at(i);
-
-			for(double j = 1; j < 4; j++) { // up to 3 isotopic peak
-				theo_mz = curMZ + ((1.0/z) * j); // current theoretical isotopic peak for 'curMZ'
-
-				for(int k = (i+1); k < N; k++) {
-					obs_mz = mzValues.at(k);
-					delta = fabs(obs_mz - theo_mz);
-
-					if(delta < DA_ERR) peakClass[ obs_mz ] = curMZ;
-					else if(obs_mz > theo_mz) break;
-				}
-			}
-		}
-	}
-
-	/*
-	 * At this point, all peaks have been classified. Peaks where the map value
-	 * is zero in peakClass will be retained and all others removed from spectrum.
-	 */
-	for(int i = 0; i < N; i++) {
-		curMZ = mzValues.at(i);
-		int pClass = peakClass[ curMZ ];
-		if(pClass != 0) {
-			curPeak = raw_spectrum.find(curMZ);
-			raw_spectrum.erase(curPeak);
-		}
-	}
-}
+//void PSMClass::deisotopeSpectrum() {
+//	map<double, double> peakClass; // k = an observed peak, v = it's monoisotopic parent (if any)
+//	map<double, vector<double> >::iterator curPeak;
+//	deque<double> mzValues;
+//	double curMZ, obs_mz, delta, theo_mz;
+//	const double DA_ERR = 0.01; // about 10ppm
+//	int N = 0;
+//
+//	for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
+//		curMZ = curPeak->first;
+//		mzValues.push_back(curMZ);
+//		peakClass[ curMZ ] = 0; // a zero value here means the peak is not assigned to a monoisotopic parent
+//	}
+//
+//	N = (signed) mzValues.size();
+//	sort( mzValues.begin(), mzValues.end() ); // sort m/z values from low to high
+//
+//	for(double z = 1; z < 3; z++) { // assume isotopic peaks up to charge states of 2;
+//
+//		for(int i = 0; i < N; i++) {
+//			curMZ = mzValues.at(i);
+//
+//			for(double j = 1; j < 4; j++) { // up to 3 isotopic peak
+//				theo_mz = curMZ + ((1.0/z) * j); // current theoretical isotopic peak for 'curMZ'
+//
+//				for(int k = (i+1); k < N; k++) {
+//					obs_mz = mzValues.at(k);
+//					delta = fabs(obs_mz - theo_mz);
+//
+//					if(delta < DA_ERR) peakClass[ obs_mz ] = curMZ;
+//					else if(obs_mz > theo_mz) break;
+//				}
+//			}
+//		}
+//	}
+//
+//	/*
+//	 * At this point, all peaks have been classified. Peaks where the map value
+//	 * is zero in peakClass will be retained and all others removed from spectrum.
+//	 */
+//	for(int i = 0; i < N; i++) {
+//		curMZ = mzValues.at(i);
+//		int pClass = peakClass[ curMZ ];
+//		if(pClass != 0) {
+//			curPeak = raw_spectrum.find(curMZ);
+//			raw_spectrum.erase(curPeak);
+//		}
+//	}
+//}
 

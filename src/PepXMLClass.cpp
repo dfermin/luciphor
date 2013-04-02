@@ -8,6 +8,7 @@
 #include <iostream>
 #include <fstream>
 #include <utility>
+#include <iomanip> // for pretty formatting
 #include <boost/filesystem/operations.hpp>
 #include <boost/multi_array.hpp>
 #include <boost/regex.hpp>
@@ -45,7 +46,6 @@ double g_MIN_DIST = -20.00;
 
 
 const double min_deltaCN = 0.1;
-const double H = 1.00727;
 
 
 // Function opens the user-given pepXML file and parses out the relevant data
@@ -72,7 +72,7 @@ void PepXMLClass::parsePepXMLfile() {
 
 	boost::regex aminoacid_mod_regex("^.*<aminoacid_modification aminoacid=\"([^\"])\".*mass=\"([^\"]+)\".*variable=\"(Y|N)\".*");
 	boost::regex spectrum_query_regex("^.*<spectrum_query spectrum=\"([^\"]+)\".+start_scan=\"([^\"]+)\".+ assumed_charge=\"(\\d)\".*");
-	boost::regex search_hit_regex("^.*<search_hit hit_rank.* peptide=\"(\\w+)\" peptide_prev_aa.* calc_neutral_pep_mass=\"([^\"]+)\".*");
+	boost::regex search_hit_regex("^.*<search_hit hit_rank=\"1\" peptide=\"(\\w+)\" peptide_prev_aa.* calc_neutral_pep_mass=\"([^\"]+)\".*");
 	boost::regex modification_mass_regex("^.*<mod_aminoacid_mass position=\"(\\d+)\" mass=\"([^\"]+)\".*");
 	boost::regex nterm_mod_regex("^.*<modification_info mod_nterm_mass=\"([^\"]+)\".*");
 	boost::regex end_spectrum_query("^.*</search_hit>.*");
@@ -412,7 +412,7 @@ void PepXMLClass::prunePSMdeq() {
 			     << "Discarding " << curZ->second.totalZ << " PSM's "
 				 << "due to insufficient data for modeling of their charge state.\n"
 				 << "If you want to try and 'capture' these cases, adjust "
-				 << "your luiphor parameters\n";
+				 << "your Luciphor parameters\n";
 
 			z = curZ->first;
 			for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
@@ -458,12 +458,17 @@ void PepXMLClass::acquireModelParameters() {
 	map<int, modelParamStruct> modelParametersMap;
 	map<int, modelParamStruct>::iterator m;
 	map<int, double>::iterator cur_mz_err;
+	map<int, int> chargeFreqMap;
+	map<int, int>::iterator cfm_iter;
+
 	list<double> M_ints_Y, M_ints_B, M_dist_Y, M_dist_B;
 	list<double> U_ints, U_dist;
 	list<double> *ptr  = NULL;
 	list<double>::iterator L;
+
 	set<int> missedChargeStates;
 	set<int>::iterator s_iter;
+
 	modelParamStruct *curParams = NULL;
 
 
@@ -483,7 +488,7 @@ void PepXMLClass::acquireModelParameters() {
 	boost::threadpool::pool TP( g_NUM_THREADS );
 
 	// First step is to identify all of the matched peaks from all of the spectra
-	// and collect the intensities of the classified peaks.
+	// and collect the intensities & distances of the classified peaks.
 	// We will only use spectra with a probability >= modelProb
 	// to compute the model parameters.
 	i = 0;
@@ -493,6 +498,30 @@ void PepXMLClass::acquireModelParameters() {
 	// We collect model parameters by charge state
 	zN = 0;
 	maxChargeState = getMaxChargeState();
+
+
+
+	// There is a minimum number of PSMs we need to obtain accurate modeling parameters.
+	// If we don't get at least 'N' PSMs for a given charge state, we can't model
+	// that charge state. The user can force the program to model them.
+	for(curChargeState = 2; curChargeState <= maxChargeState; curChargeState++) {
+
+		zN = 0;
+		for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+			if( curPSM->useForModeling() ) {
+				if(curPSM->getCharge() == curChargeState) zN++;
+			}
+		}
+		chargeFreqMap[ curChargeState ] = zN;
+	}
+
+	for(cfm_iter = chargeFreqMap.begin(); cfm_iter != chargeFreqMap.end(); cfm_iter++) {
+		cerr << "+" << cfm_iter->first << ":";
+		cerr << setw(5);
+		cerr << cfm_iter->second << " PSMs for modeling.\n";
+	}
+	cerr << setw(0);
+
 
 
 	for(curChargeState = 2; curChargeState <= maxChargeState; curChargeState++) {
@@ -546,13 +575,6 @@ void PepXMLClass::acquireModelParameters() {
 
 		if(zN >= g_MIN_MODEL_NUM) { // record modeling parameters only if you have data for the current charge state
 
-			// prune intensity distributions to remove extreme outliers
-//			double percentile_trim = 0.1;
-//			pruneList(&M_ints_B, percentile_trim);
-//			pruneList(&M_ints_Y, percentile_trim);
-//			pruneList(&U_ints, percentile_trim);
-
-
 			if(g_DEBUG_MODE) {
 
 				debug_modelData.open("modelData.debug", ios::out);
@@ -593,19 +615,20 @@ void PepXMLClass::acquireModelParameters() {
 
 
 			cerr << endl
-				 << "z = " << curChargeState << ",    # PSM: " << zN << " with Score >= " << g_model_prob << endl
-				 << "z = " << curChargeState << ",    b-ion Intensity Matched (mean, stdev): ("
+				 << "Z: +" << curChargeState << "    # PSM: " << zN << " with Score >= " << g_model_prob << endl
+				 << "------------------------------------------------------------------------\n"
+				 << "Z: +" << curChargeState << "    b-ion Intensity Matched (mean, stdev): ("
 				 << meanM_b << ", " << sqrt(varM_b) << "); N = " << M_ints_B.size() << endl
-				 << "z = " << curChargeState << ",    y-ion Intensity Matched (mean, stdev): ("
+				 << "Z: +" << curChargeState << "    y-ion Intensity Matched (mean, stdev): ("
 				 << meanM_y << ", " << sqrt(varM_y) << "); N = " << M_ints_Y.size() << endl
-				 << "z = " << curChargeState <<",     b-ion Distance Matched (mean, stdev): ("
-				  << meanMd_b << ", " << sqrt(varMd_b) << "); N = " << M_dist_B.size() << endl
-				  << "z = " << curChargeState <<",     y-ion Distance Matched (mean, stdev): ("
-				  << meanMd_y << ", " << sqrt(varMd_y) << "); N = " << M_dist_Y.size() << endl
-				  << "z = " << curChargeState << ",        Intensity Unmatched (mean, stdev): (" << meanU
-				  << ", " << sqrt(varU) << "); N = " << U_ints.size() << endl
-				  << "z = " << curChargeState << ",         Distance Unmatched (mean, stdev): (" << meanUd
-				  << ", " << sqrt(varUd) << "); N = " << U_dist.size() << endl;
+				 << "Z: +" << curChargeState <<"     b-ion Distance Matched (mean, stdev): ("
+				 << meanMd_b << ", " << sqrt(varMd_b) << "); N = " << M_dist_B.size() << endl
+				 << "Z: +" << curChargeState <<"     y-ion Distance Matched (mean, stdev): ("
+				 << meanMd_y << ", " << sqrt(varMd_y) << "); N = " << M_dist_Y.size() << endl
+				 << "Z: +" << curChargeState << "        Intensity Unmatched (mean, stdev): (" << meanU
+				 << ", " << sqrt(varU) << "); N = " << U_ints.size() << endl
+				 << "Z: +" << curChargeState << "         Distance Unmatched (mean, stdev): (" << meanUd
+				 << ", " << sqrt(varUd) << "); N = " << U_dist.size() << endl << endl;
 
 			logF << endl << "Model parameters (Z = " << curChargeState << ")\n"
 				 << "# PSMs:\t" << zN << endl
@@ -662,27 +685,51 @@ void PepXMLClass::acquireModelParameters() {
 
 	} // end model building over given charge state
 
-	// iterate over the charge states and identify any that were not recorded
-	// in the modelParametersMap. For those cases, assign them the modeling parameters
-	// of a lower charge state. This is not a great solution, but it's currently the
-	// best option if you don't have enough data to model a given charge state.
-	for(s_iter = missedChargeStates.begin(); s_iter != missedChargeStates.end(); s_iter++) {
-		curChargeState = *s_iter - 1;
-		m = modelParametersMap.find( curChargeState );
-		if(m != modelParametersMap.end()) {
+	if(g_captureChargeStateModel) {
+		if(!missedChargeStates.empty()) cerr << endl; // prettier output
 
-			curParams = new modelParamStruct();
-			*curParams = m->second;
+		// iterate over the charge states and identify any that were not recorded
+		// in the modelParametersMap. For those cases, assign them the modeling parameters
+		// of a lower charge state. This is not a great solution, but it's currently the
+		// best option if you don't have enough data to model a given charge state.
+		for(s_iter = missedChargeStates.begin(); s_iter != missedChargeStates.end(); s_iter++) {
 
-			for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-				if(curPSM->getCharge() != *s_iter) continue;
-				curPSM->setParamStruct(curParams);
+			for(int Z = (*s_iter - 1); Z >= 2; Z--) {
+				m = modelParametersMap.find( Z );
+
+				if(m != modelParametersMap.end()) { // you found the nearest modeled charge state
+					curParams = new modelParamStruct();
+					*curParams = m->second;
+
+					for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+						if(curPSM->getCharge() == *s_iter) curPSM->setParamStruct( curParams );
+					}
+					delete(curParams); curParams = NULL;
+
+					cerr << "+" << *s_iter << " PSMs will be scored using parameters from "
+						 << "+" << Z << " PSMs\n";
+					break; // exit the loop for this missed charge state.
+				}
 			}
-			delete(curParams); curParams = NULL;
-			break; // exit for loop charge states have been filled.
-		}
-	}
 
+
+	//		curChargeState = *s_iter - 1;
+	//		m = modelParametersMap.find( curChargeState );
+	//		if(m != modelParametersMap.end()) {
+	//
+	//			curParams = new modelParamStruct();
+	//			*curParams = m->second;
+	//
+	//			for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+	//				if(curPSM->getCharge() != *s_iter) continue;
+	//				curPSM->setParamStruct(curParams);
+	//			}
+	//			delete(curParams); curParams = NULL;
+	//			break; // exit for loop charge states have been filled.
+	//		}
+		}
+
+	}
 	cerr << endl; // prettier output
 
 
@@ -776,11 +823,6 @@ void PepXMLClass::acquireModelParameters_HCD() {
 
 
 	if(zN >= g_MIN_MODEL_NUM) { // record modeling parameters only if you have data for the current charge state
-
-		// prune intensity distributions to remove extreme outliers
-//		double percentile_trim = 0.1;
-//		pruneList(&M_ints, percentile_trim);
-//		pruneList(&U_ints, percentile_trim);
 
 		if(g_DEBUG_MODE) {
 			// Debug function that prints out the values used for modeling.
@@ -950,14 +992,12 @@ void PepXMLClass::writeLuciphorResults() {
 
 		outf << "numRPS\t" // number of reported phospho sites
 			 << "numPPS\t" // number of potential phospho sites
-			 << "Luciphor_Prob\t"
+
 			 << "localFLR\t"
 			 << "globalFLR\t"
 			 << "delta_score\t"
 			 << "Luciphor_Score_1\t"
 			 << "Luciphor_Score_2\t"
-
-			// << "NL_prob\t"
 
 			 << "isDecoy1\t"
 			 << "isDecoy2\t"
@@ -981,7 +1021,6 @@ void PepXMLClass::writeLuciphorResults() {
 		outf << "nss\t"
 			 << "numRPS\t" // number of reported phospho sites
 			 << "numPPS\t" // number of potential phospho sites
-			 << "Luciphor_Prob\t"
 			 << "localFLR\t"
 			 << "globalFLR\t"
 			 << "delta_score\t"
@@ -1149,6 +1188,7 @@ void PepXMLClass::process_with_Ascore() {
 	// The default number of threads is 1
 	boost::threadpool::pool TP( g_NUM_THREADS );
 
+
 	cerr << "\nRunning Ascore... ";
 	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
 
@@ -1222,6 +1262,35 @@ void PepXMLClass::calcFLR() {
 	double maxDeltaScore = -1.0;
 	flrStruct *curFLR = NULL;
 	FLRClass *flr = NULL;
+
+
+	if(g_scoreSelect) {
+		int N = 0;
+		set<string>::iterator S;
+		for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+			S = g_PSMscoreSet.find( curPSM->getSpecId() );
+			if( S != g_PSMscoreSet.end() ) N++;
+		}
+
+		cerr << "\nScored PSMs = " << N << endl;
+		if(N < g_MIN_NUM_PSM_FOR_FLR) {
+			cerr << "Not enough PSMs scored to accurately estimate the FLR. "
+				 << "(Minimum is " << g_MIN_NUM_PSM_FOR_FLR << ")\n"
+				 << "FLR estimation will not be performed.\n\n";
+
+
+			curFLR = new flrStruct;
+			curFLR->globalFLR = -1;
+			curFLR->localFLR  = -1;
+			curFLR->prob      = -1;
+			for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++)
+				curPSM->setFLR( curFLR );
+
+			delete(curFLR); curFLR = NULL;
+
+			return;
+		}
+	}
 
 	cerr << "Estimating False Localization Rate (FLR).\n";
 

@@ -46,7 +46,6 @@ private:
 	map<double, peakStruct> matchedPeaks;
 	map<double, peakStruct> unmatchedPeaks;
 
-	map<string, double> neutralLossMap; // holds neutral loss masses
 	map<string, double> ppmErrMap; // k = fragment ion, v = ppm-level err
 	map<double, double> local_spectrum;
 
@@ -62,7 +61,7 @@ public:
 	void printIons();
 	void recordMatchPeaks(bool forModeling);
 	void recordUnmatchedPeaks();
-	void makeSiteDetermIons();
+	void keepOnlySiteDetermIons(set<string> &ions);
 
 	void addPeakData(map<double, peakStruct> *targetPtr, char whichMap);
 	void getMatchedPeaks(map<double, peakStruct> *Mptr);

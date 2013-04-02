@@ -12,6 +12,7 @@
 #include <deque>
 #include <ctime>
 #include <fstream>
+#include <vector>
 #include <sstream>
 #include <ctype.h>
 #include <algorithm>
@@ -49,6 +50,7 @@ bool g_LIMIT_CHARGE_STATE = false;
 bool g_WRITE_TOP_TWO = false;
 bool g_useOnlySiteDetermIons = false;
 bool g_usePPM = false;
+bool g_removePrecursorNL = true;
 
 double MIN_MZ = 100.0; // lowest m/z value we'll consider
 double g_MZ_ERR = 0.5;
@@ -77,7 +79,7 @@ static const struct option longOpts[] = {
 		{ "capture", no_argument, NULL, 'c' },
 		{ "noDecoys", no_argument, NULL, 0 },
 		{ "hcd", no_argument, NULL, 0 },
-		{ "siteDetermIons", no_argument, NULL, 0 },
+		{ "SDI", no_argument, NULL, 0 },
         { "ppm", no_argument, NULL, 0 },
 		{ "debug", no_argument, NULL, 0 },
 		{ "Sl", required_argument, NULL, 0 }
@@ -86,7 +88,7 @@ static const struct option longOpts[] = {
 
 
 void print_usage() {
-	cerr << "\nUSAGE: luciphor -i -d -w [ -e -f -m -p -o (-M -P) -t -b -T -A -n -c -Z -k]\n"
+	cerr << "\nUSAGE: luciphor -i -d -w [ -e -f -m -p -o (-M -P) -t -b -T -A -c -n -N -Z -k]\n"
 		 << "   -i <interact.pep.xml>     pepXML file to analyze\n"
 		 << "   -d <path>                 the path to the spectral data files\n"
 		 << "   -w <# greater than 0>     The MS2 fragment ion tolerance in Daltons (default is " << g_MZ_ERR << " Da.)\n"
@@ -94,30 +96,29 @@ void print_usage() {
 		 << "\nOptional parameters\n"
 		 << "   -p <0.0-1.0>              min. Peptide probability threshold (default is " << g_prob_threshold << ")\n"
 		 << "   -m <0.0-1.0>              min. Peptide probability to use for parameter estimations (default is " << g_model_prob << ")\n"
-		 << "   -e <mzML, mzXML>          File extension used for reading spectral data files (default is mzXML)\n"
+		 << "   -e <mzML, mzXML, etc..>   File extension used for reading spectral data files (default is mzXML)\n"
 		 << "   -f                        \"The Full Monty\": Report scores for all spectra not just representative ones\n"
-		 //<< "   -A / --Ascore             Run our version of Ascore algorithm instead (m/z window fixed at 0.6 for this)\n"
+		 << "   -A / --Ascore             Run our version of Ascore algorithm instead of Luciphor (m/z window fixed at 0.6 for this)\n"
 		 << "   -c / --capture            Capture PSM's you can't model, use the model parameters for the next closest charge state\n"
 		 << "   -Z <1,2,3...>             Only model and score spectra of the given charge state\n"
-		 << "   -o <output_file_name>     Write results to this file name (default output name is based upon input pepXML file name)\n\n"
+		 << "   -o output_file_name       Write results to this file name (default output name is based upon input pepXML file name)\n\n"
 		 << "   -T <1-N>                  Number of threads to use (default is 1)\n"
-
-		 << "   --hcd                     Tells me that the input data is HCD and to adjust my parameters accordingly\n\n"
+		 << "   --single                  Represent modified residues by a single character (usually the AA letter in lower case)\n"
+		 << "   --hcd                     Tells me that the input data is HCD and to adjust my parameters accordingly\n"
+		 << "   -N                        Do not remove precursor neutral loss peaks from spectrum before scoring\n"
+		 << "   -t <1,2>                  Tells me to write the spectra to disk with each assigned peak annotated\n"
+		 << "                             1 = raw spectrum\n"
+		 << "                             2 = scaled intensities (0-100)\n" //3 = log(quantile normalized intensities)\n"
+		 << "   -b                        When writing spectra to disk, output *BOTH* luciphor predictions\n\n"
 
 		 << "   -k <256-N>                Consider PSMs with 'k' number of permutations (default is " << g_NUM_PERMS_LIMIT << ", minimum is 256)\n"
 		 << "                             *Note: increasing this parameter beyond " << g_NUM_PERMS_LIMIT << " requires >8GB of RAM and many hours to run\n\n"
-
-
 
 		 << "   -n <1,2,3>                Tells me how to deal with neutral loss fragment ions\n"
 		 << "                             By default, neutral loss peaks are used for both modeling and scoring\n"
 		 << "                             1 = do not use them at all\n"
 		 << "                             2 = use neutral loss peaks ONLY for model parameter acquisition\n"
 		 << "                             3 = use them only in final scoring of phospho-peptides (ie: not for model parameter acquisition)\n\n"
-
-		 << "   -t <1,2>                  Tells me to write the spectra to disk with each assigned peak annotated\n"
-		 << "                             1 = raw spectrum, 2 = scaled intensities (0-100)\n" //3 = log(quantile normalized intensities)\n"
-		 << "   -b                        When writing spectra to disk, write *BOTH* luciphor peptide predictions to disk\n\n"
 
 		 << "   -P <score_method>         Use this option if you want to pick spectra based upon\n"
 		 << "                             a search engine score instead of PeptideProphet probabilities\n"
@@ -134,9 +135,8 @@ void print_usage() {
 		 << "                             -M mascot=<ionScore> Use the Mascot ion-score\n\n"
 
 		 << "   --Sl <file>               Score and report only results for the PSMs in this file, one PSM ID per line\n"
-		 << "   --noDecoys                Do *NOT* estimate False Localization Rate (FLR) using decoy phosphorylation sites (Luciphor only option)\n"
-		 << "   --single                  Represent modified residues by a single character (usually the AA letter in lower case)\n"
-		 << "   --siteDetermIons          Use only site determining ions in final scoring (Luciphor only option)\n\n"
+		 << "   --noDecoys                Do *NOT* estimate False Localization Rate (FLR) using decoy phosphorylation sites\n"
+		 << "   --SDI                     Use only fragment ions that distinguish between the top two permutations of a PSM when performing final scoring\n\n"
 
 		 << "   --debug                   Debug mode, for developers. Produces extra files to track down errors.\n"
 
@@ -171,9 +171,12 @@ void parse_command_line_args(int argc, char *argv[]) {
 	int c;
 
 	int longIndex;
-	while( (c = getopt_long(argc, argv, "m:p:i:w:d:e:T:t:P:M:o:n:Z:k:fAcb", longOpts, &longIndex)) != -1 ) {
+	while( (c = getopt_long(argc, argv, "m:p:i:w:d:e:T:t:P:M:o:n:Z:k:fcAbN", longOpts, &longIndex)) != -1 ) {
 		switch(c) {
 
+		case 'N':
+			g_removePrecursorNL = false;
+			break;
 		case 'k':
 			g_NUM_PERMS_LIMIT = atof(optarg);
 			break;
@@ -261,7 +264,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 				if( strcmp("ppm", longOpts[longIndex].name) == 0 ) {
 					g_usePPM = true;
 				}
-				if( strcmp("siteDetermIons", longOpts[longIndex].name) == 0 ) {
+				if( strcmp("SDI", longOpts[longIndex].name) == 0 ) {
 					g_useOnlySiteDetermIons = true;
 				}
 				if( strcmp("debug", longOpts[longIndex].name) == 0 ) {
@@ -391,7 +394,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 
 	cerr << "Algorithm: ";
 	if(g_IS_HCD) cerr << "HCD Mode\n";
-	else if(g_runAscoreInstead) cerr << "A-Score (Modeling thresholds will be ignored)\n";
+	else if(g_runAscoreInstead) cerr << "A-Score (Modeling threshold will be ignored)\n";
 	else cerr << "CID Mode\n";
 
 	cerr << "Decoys: " << g_randDecoyAA << endl;
@@ -416,6 +419,9 @@ void parse_command_line_args(int argc, char *argv[]) {
 		cerr << "\tOny site determining ions will be used for scoring\n";
 	}
 
+	if( !g_removePrecursorNL ) {
+		cerr << "\tPrecuror neutral loss peaks will not be removed from spectrum\n";
+	}
 
 	if(g_NO_NL_PEAKS) {
 		cerr << "\tNeutral loss fragment ions will be ignored\n";
@@ -448,6 +454,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 		if(g_intensityType == 1) cerr << "RAW Intensities";
 		if(g_intensityType == 2) cerr << "Scaled Intensities (0-100)";
 		if(g_intensityType == 3) cerr << "Median Normalized Intensities";
+		cerr << endl;
 	}
 
 	if(g_WRITE_TOP_TWO) cerr << "\tWriting matched peaks for BOTH predictions\n";
@@ -455,7 +462,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 
 	if(g_DEBUG_MODE) cerr << "\tRunning in debug mode (Limited to 1 thread)...\n";
 
-	cerr << "==============================================================\n";
+	cerr << "\n==============================================================\n";
 }
 
 
@@ -471,7 +478,10 @@ string getExecutionParameters() {
 		+ "Permutation limit:\t" + dbl2string(g_NUM_PERMS_LIMIT) + "\n"
 		+ "Number of threads:\t" + int2string(g_NUM_THREADS) + "\n";
 
-	ret += "Fragment ion tolerance:\t " + dbl2string(g_MZ_ERR);
+	ret += "Fragment ion tolerance:\t ";
+	if(g_runAscoreInstead) ret += "0.6 Da\n";
+	else ret += dbl2string(g_MZ_ERR);
+
 	if(g_usePPM) ret +=  " PPM\n";
 	else ret += " Da\n";
 
@@ -741,13 +751,16 @@ void initialize_AA_masses() {
 
 
 // Function substitutes single letter characters for their full mass-qualified string
-string repModAAchar(string *srcPtr) {
+string repModAAchar(string *srcPtr, double nterm_mass) {
 	string ret;
 	int N = srcPtr->length();
 	char curChar;
 	map<char, string>::iterator curMod;
 
-	if(g_singleLetter) ret = *srcPtr; // just keep the string as is
+	if(g_singleLetter) { // just keep the string as is
+		if(nterm_mass != 0.0) ret = "n_" + *srcPtr;
+		else ret = *srcPtr;
+	}
 	else {
 		for(int i = 0; i < N; i++) {
 			curChar = srcPtr->at(i);
@@ -757,6 +770,12 @@ string repModAAchar(string *srcPtr) {
 			else {
 				ret += curMod->second;
 			}
+		}
+
+		if(nterm_mass != 0.0) {
+			string nterm_str = "n[" + dbl2string( round_dbl(nterm_mass, 0) ) + "]";
+			string tmp = nterm_str + ret;
+			ret = tmp;
 		}
 	}
 
@@ -1138,6 +1157,7 @@ void parsePSMfile(string srcFile) {
 	while(inF.good()) {
 		line = ""; // prep for next iteration
 		getline(inF, line);
+		if(line.empty()) continue;
 		if(line.at(0) == '#') continue; // skip comment lines
 
 		g_PSMscoreSet.insert(line);
@@ -1185,5 +1205,204 @@ bool fileExists(const string& filename) {
 
    file.close();
    return ret;
+}
+
+
+
+// Given two sequences, this program returns the site-determining
+// ions for each of them. The function returns the peptide sequences only,
+// ion charge states are ignored here.
+void getSiteDeterminingIons(string pep1, string pep2, set<string> &ions1, set<string> &ions2) {
+
+	int N = (signed) pep1.length(); // both peptides are assumed to be the same length
+
+	vector<int> common(N,0);
+	vector<int> v1(N,0);
+	vector<int> v2(N,0);
+
+	list<int> L;
+
+	map<double, int> mzFreq;
+	map<double, int>::iterator mzIter;
+	map<string, double> b1, y1, b2, y2;
+	map<string, double>::iterator ionIter;
+
+	double mz;
+	char c;
+	stringstream *ss = NULL;
+	string final, tmp1;
+	int x;
+
+
+	//identify the window where the site determining ions lay
+	for(int i = 0; i < N; i++) if(pep1.at(i) != pep2.at(i)) common.at(i) = 1;
+
+
+	// recode the positions of the site determining ions in the common ladder
+	for(int i = 0; i < N; i++) if(common.at(i) == 1) L.push_back(i);
+
+	L.sort();
+	for(int i = L.front(); i < L.back(); i++) common.at(i) = 1;
+
+
+	// record all observed masses into mzFreq.
+	mzFreq.clear();
+	final.clear();
+	tmp1.clear();
+
+
+	// record ions for pep1
+	for(int i = 0; i < N; i++) {
+		if(common.at(i) == 1) {
+
+			// b-ion
+			x = i + 1;
+			tmp1 = pep1.substr(0,x);
+			ss = new stringstream;
+			*ss << x;
+
+			final = "b^" + ss->str() + ":" + tmp1;
+			mz =  getIonMass(tmp1, 'b');
+			if(mz > MIN_MZ) b1[ final ] = mz;
+
+			// record all observed masses into mzFreq.
+			if(mz > MIN_MZ) {
+				mzIter = mzFreq.find(mz);
+				if(mzIter == mzFreq.end()) mzFreq[ mz ] = 1;
+				else mzIter->second += 1;
+			}
+
+			delete(ss);
+			final.clear();
+			tmp1.clear();
+
+
+			// y-ion
+			tmp1 = pep1.substr(x);
+			x = N - i - 1; // used x in line above to get the correct string
+			ss = new stringstream;
+			*ss << x;
+
+			final = "y^" + ss->str() + ":" + tmp1;
+			mz = getIonMass(tmp1, 'y');
+			if(mz > MIN_MZ) y1[ final ] = mz;
+
+			// record all observed masses into mzFreq.
+			if(mz > MIN_MZ) {
+				mzIter = mzFreq.find(mz);
+				if(mzIter == mzFreq.end()) mzFreq[ mz ] = 1;
+				else mzIter->second += 1;
+			}
+
+			delete(ss);
+			final.clear();
+			tmp1.clear();
+		}
+	}
+
+
+	//record ions for pep2
+	for(int i = 0; i < N; i++) {
+		if(common.at(i) == 1) {
+
+			// b-ion
+			x = i + 1;
+			tmp1 = pep2.substr(0,x);
+			ss = new stringstream;
+			*ss << x;
+			final = "b^" + ss->str() + ":" + tmp1;
+			mz =  getIonMass(tmp1, 'b');
+			if(mz > MIN_MZ) b2[ final ] = mz;
+
+			// record all observed masses into mzFreq.
+			if(mz > MIN_MZ) {
+				mzIter = mzFreq.find(mz);
+				if(mzIter == mzFreq.end()) mzFreq[ mz ] = 1;
+				else mzIter->second += 1;
+			}
+
+			delete(ss);
+			final.clear();
+			tmp1.clear();
+
+
+			// y-ion
+			tmp1 = pep2.substr(x);
+			x = N - i - 1; // used x in line above to get the correct string
+			ss = new stringstream;
+			*ss << x;
+
+			final = "y^" + ss->str() + ":" + tmp1;
+			mz = getIonMass(tmp1, 'y');
+			if(mz > MIN_MZ) y2[ final ] = mz;
+
+			// record all observed masses into mzFreq.
+			if(mz > MIN_MZ) {
+				mzIter = mzFreq.find(mz);
+				if(mzIter == mzFreq.end()) mzFreq[ mz ] = 1;
+				else mzIter->second += 1;
+			}
+
+			delete(ss);
+			final.clear();
+			tmp1.clear();
+		}
+	}
+
+
+	// At this point, mzFreq contains the frequency of all the m/z values for
+	// the site-determining ions. Any m/z value with a frequency greater than
+	// one should be ignored.
+	// Record the candidate peaks into the passed set objects
+
+	// pep 1
+	for(ionIter = b1.begin(); ionIter != b1.end(); ionIter++) {
+		mz = ionIter->second;
+		if( mzFreq[ mz ] == 1 ) ions1.insert(ionIter->first);
+	}
+
+	for(ionIter = y1.begin(); ionIter != y1.end(); ionIter++) {
+		mz = ionIter->second;
+		if( mzFreq[ mz ] == 1 ) ions1.insert(ionIter->first);
+	}
+
+
+	// pep2
+	for(ionIter = b2.begin(); ionIter != b2.end(); ionIter++) {
+		mz = ionIter->second;
+		if( mzFreq[ mz ] == 1 ) ions2.insert(ionIter->first);
+	}
+
+	for(ionIter = y2.begin(); ionIter != y2.end(); ionIter++) {
+		mz = ionIter->second;
+		if( mzFreq[ mz ] == 1 ) ions2.insert(ionIter->first);
+	}
+
+
+}
+
+
+
+
+// Function returns the mass of the given string. This function is only
+// used by the globals::getSiteDeterminingIons() function and not meant
+// to be used generally.
+double getIonMass(string seq, char ionType) {
+    char c;
+    int N = (signed) seq.length();
+
+    const double H = 1.00728;
+    const double H2O = 18.0062;
+
+    double ret = H;
+
+    if(ionType == 'y') ret += H2O;
+
+    for(int i = 0; i < N; i++) {
+		c = seq.at(i);
+		ret += AAmass[c];
+    }
+
+    return round_dbl(ret,1); // round the value to 0.1 Daltons
 }
 

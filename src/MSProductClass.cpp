@@ -23,11 +23,6 @@
 
 using namespace std;
 
-const double H = 1.00727;
-const double OH = 17.002745;
-const double e = 0.00054858026;
-const double H2O = 18.010015;
-
 
 
 // default constructor
@@ -44,17 +39,18 @@ MSProductClass::MSProductClass(string the_specId, string txt, int Z, double ntm)
 	mz_err = g_MZ_ERR * 0.5;
 	if(g_usePPM) mz_err = g_MZ_ERR * PPM;
 
-
-	neutralLossMap[ "-H2O" ] =   -1.0 * H2O;
-	neutralLossMap[ "+H2O" ] = H2O;
-	neutralLossMap[ "-H3PO4" ] = -97.976895;
-	neutralLossMap[ "-HPO3" ] =  -79.966330;
-	neutralLossMap[ "-NH3" ] =   -17.026549;
-
-
 	seq_mass = getMass() + nterm_mass;
 	makeIons(); // fragment the given sequence into B and Y ions
 	totNumIons = ((signed)b_ions.size()) + ((signed)y_ions.size());
+
+//	if(g_DEBUG_MODE) {
+//		cerr << seq << endl;
+//		map<string, double>::iterator m;
+//		for(m = b_ions.begin(); m != b_ions.end(); m++) cerr << m->first << "\t" << m->second << endl;
+//		for(m = y_ions.begin(); m != y_ions.end(); m++) cerr << m->first << "\t" << m->second << endl;
+//		cerr << endl;
+//	}
+
 }
 
 
@@ -95,7 +91,8 @@ double MSProductClass::getIonMass(string srcStr) {
 	if(f3 != string::npos) {
 		tmp = ionStr.substr(0, f3);
 		ionStr = tmp;
-		ret += neutralLossMap[ "-H3PO4" ];
+		ret += -H3PO4;
+		//ret += neutralLossMap[ "-H3PO4" ];
 	}
 
 
@@ -147,25 +144,63 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 	int N = (signed) ion.length();
 	string Nstr = int2string(N);
 	string new_ion;
-	bool hasPhospho = false;
+	string phosphoChars = "sty";
+	size_t f;
 
-	int S, T, Y;
+	bool hasPhospho = false;
+	bool looseNH3 = false;
+	bool looseH2O = false;
+
+
+	// In CID data there is sufficient noise in the spectra to allow for matches
+	// to decoy fragment ions. This is not the case for HCD data.
+	// Therefore we need to allow neutral losses in HCD data to be generated
+	// using all of the decoy residues
+	if( g_IS_HCD ) phosphoChars = "sty234567890@#$%&;?~";
+
 
 	// compute mass of ion
 	mass = 0.0;
 	for(int i = 0; i < N; i++) { mass += AAmass[ ion.at(i) ]; }
 
-	// determine if the ion contains an STY letter, if it does, then the loss
-	// of a phospho-group is possible. Otherwise, the ion can only lose
-	// NH3 or H2O/H
-	S = 0; T = 0; Y = 0; // count the number of STY in the ion
-	for(int i = 0; i < N; i++) {
-		if( ion.at(i) == 's') S++;
-		if( ion.at(i) == 't') T++;
-		if( ion.at(i) == 'y') Y++;
 
+	// determine if the ion contains an STY letter, if it does, then the loss
+	// of a phospho-group is possible.
+	int H3PO4ctr = 0;
+	for(int i = 0; i < N; i++) {
+		f = phosphoChars.find( ion.at(i) );
+		if(f != string::npos) H3PO4ctr++;
 	}
-	if( (S+T+Y) > 0 ) hasPhospho = true; // has at least 1 phosphorylated AA
+	if( H3PO4ctr > 0 ) hasPhospho = true; // has at least 1 phosphorylated AA
+
+
+	// determine if the ion can lose ammonia or water
+	int NH3ctr = 0, H2Octr = 0;
+	for(int i = 0; i < N; i++) {
+		if(ion.at(i) == 'R') NH3ctr++;
+		if(ion.at(i) == 'K') NH3ctr++;
+		if(ion.at(i) == 'Q') NH3ctr++;
+		if(ion.at(i) == 'N') NH3ctr++;
+
+		if(ion.at(i) == 'S') H2Octr++;
+		if(ion.at(i) == 'T') H2Octr++;
+		if(ion.at(i) == 'E') H2Octr++;
+		if(ion.at(i) == 'D') H2Octr++;
+	}
+
+	if( NH3ctr > 0 ) looseNH3 = true;
+	if( H2Octr > 0 ) looseH2O = true;
+
+
+	// For HCD data, neutral loss peaks help, but they don't help much
+	// for CID data. Therefore, don't generate the H2O and NH3 neutral loss
+	// peaks for CID data
+	if( !g_IS_HCD ) {
+		looseNH3 = false;
+		looseH2O = false;
+	}
+
+
 
 	double extraProton = 0; // Computes: ( H * (z-1) ) <- you need this for dealing with multiple charge states;
 	for(int z = 1; z < charge; z++) {
@@ -181,15 +216,47 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 				if(z > 1) new_ion += "/+" + int2string(z);
 
 				mz_value = mass + H - e + extraProton;
-				mz_value += neutralLossMap[ "-H3PO4" ];
+				mz_value += -H3PO4;
 				mz_value /= z;
 
-				// record the -H3PO4 neutral loss
 				if( (mz_value > MIN_MZ) && (N > 1) ) {
 					b_ions[ new_ion ] = mz_value;
 					b_ion_set.insert(new_ion);
 				}
 			} // end if(hasPhospho)
+
+
+			if(looseNH3) {
+				new_ion.clear();
+				new_ion = "b^" + Nstr + ":" + ion + "-NH3";
+				if(z > 1) new_ion += "/+" + int2string(z);
+
+				mz_value = mass + H -e + extraProton;
+				mz_value += -NH3;
+				mz_value /= z;
+
+				if( (mz_value > MIN_MZ) && (N > 1) ) {
+					b_ions[ new_ion ] = mz_value;
+					b_ion_set.insert(new_ion);
+				}
+			} // end if(looseNH3)
+
+
+			if(looseH2O) {
+				new_ion.clear();
+				new_ion = "b^" + Nstr + ":" + ion + "-H2O";
+				if(z > 1) new_ion += "/+" + int2string(z);
+
+				mz_value = mass + H -e + extraProton;
+				mz_value += -H2O;
+				mz_value /= z;
+
+				if( (mz_value > MIN_MZ) && (N > 1) ) {
+					b_ions[ new_ion ] = mz_value;
+					b_ion_set.insert(new_ion);
+				}
+			} // end if(looseH2O)
+
 		} // end b-ion
 		else if(ion_type == 'y') {
 
@@ -200,15 +267,47 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 				if(z > 1) new_ion += "/+" + int2string(z);
 
 				mz_value = mass + H2O + H + extraProton;
-				mz_value += neutralLossMap[ "-H3PO4" ];
+				mz_value += -H3PO4;
 				mz_value /= z;
 
-				// record the -H3PO4 neutral loss
 				if( (mz_value > MIN_MZ) && (N > 1) ) {
 					y_ions[ new_ion ] = mz_value;
 					y_ion_set.insert(new_ion);
 				}
 			} // end if(hasPhospho)
+
+
+			if(looseNH3) {
+				new_ion.clear();
+				new_ion = "y^" + Nstr + ":" + ion + "-NH3";
+				if(z > 1) new_ion += "/+" + int2string(z);
+
+				mz_value = mass + H2O + H + extraProton;
+				mz_value += -NH3;
+				mz_value /= z;
+
+				if( (mz_value > MIN_MZ) && (N > 1) ) {
+					y_ions[ new_ion ] = mz_value;
+					y_ion_set.insert(new_ion);
+				}
+			} // end if(looseNH3)
+
+
+			if(looseH2O) {
+				new_ion.clear();
+				new_ion = "y^" + Nstr + ":" + ion + "-H2O";
+				if(z > 1) new_ion += "/+" + int2string(z);
+
+				mz_value = mass + H2O + H + extraProton;
+				mz_value += -H2O;
+				mz_value /= z;
+
+				if( (mz_value > MIN_MZ) && (N > 1) ) {
+					y_ions[ new_ion ] = mz_value;
+					y_ion_set.insert(new_ion);
+				}
+			} // end if(looseH2O)
+
 		} // end y-ion
 	}
 }
@@ -1119,155 +1218,209 @@ void MSProductClass::printIons() {
 
 
 
-// Function generates site-determining ions for the sequence in 'seq'
-void MSProductClass::makeSiteDetermIons() {
-	int N = (signed)seq.length();
-	vector<int> v_b(N,0), v_y(N,0); // initalized to length N with zero's
-	vector<string> B, Y;
-	int ctr;
-	size_t found;
-	string modChars = "sty234567890@#$%&;?~";
-	string b_ion_str, y_ion_str, tmp, rev_str;
-	int numPhos = 0;
 
-	boost::regex ion_regex("^([by].\\d+:\\w+)(-.*)?(\/\+\\d)?");
-	boost::smatch matches;
-
-
-	// compute number of phosphorylation sites in string
-	for(int i = 0; i < N; i++) {
-		char c = seq.at(i);
-		found = modChars.find(c);
-		if(found != string::npos) numPhos++;
-	}
-
-
-	ctr = 0;
-	for(int i = 0; i < N; i++) {
-		char c = seq.at(i);
-		found = modChars.find(c);
-		if(found != string::npos) ctr++;
-		v_b.at(i) = ctr;
-	}
-
-
-	ctr = 0;
-	for(int i = N-1; i > -1; i--) {
-		char c = seq.at(i);
-		found = modChars.find(c);
-		if(found != string::npos) ctr++;
-		v_y.at(i) = ctr;
-	}
-
-
-	/*
-	 * Wherever the v_b and v_y vectors have a number equal to 'numPhos'
-	 * for this peptide, that is the ion ladder number for a site-determining ion
-	 */
-	// B-ions
-	for(int i = 1; i < N-1; i++) { // we do not include/keep the last ion (which is the whole peptide)
-		if( v_b.at(i) == numPhos ) {
-			b_ion_str = seq.substr(0, (i+1) );
-			tmp = "b^" + int2string((i+1)) + ":" + b_ion_str;
-			B.push_back(tmp);
-		}
-	}
-
-	// Y-ions (we have to work from the C-term (right-hand-side) of the string)
-	for(int i = N-1; i > 0; i--) {
-		if(v_y.at(i) == numPhos) {
-			int j = N - i;
-			y_ion_str = seq.substr(i, j);
-			tmp = "y^" + int2string(j) + ":" + y_ion_str;
-			Y.push_back(tmp);
-		}
-	}
-
-
-	if(g_DEBUG_MODE) {
-		cerr << "\nBEFORE site determining ion trimming:\n";
-		for(map<string, double>::iterator mm = b_ions.begin(); mm != b_ions.end(); mm++) {
-			cerr << mm->first << endl;
-		}
-		for(map<string, double>::iterator mm = y_ions.begin(); mm != y_ions.end(); mm++) {
-			cerr << mm->first << endl;
-		}
-		cerr << endl;
-	}
-
-
-
-	/*
-	 * Now that we have the site specific ion strings, we will clean out
-	 * the 'b/y_ion_set' sets and store only these cases
-	 */
-	map<string, double> *tmpIonMap = NULL;
-	set<string> *tmpStrSet = NULL;
-	set<string>::iterator setIter;
-	vector<string>::iterator v;
+// Function retains only the site-determining ions found in passed set object
+// for the sequence currently assigned to this PSM
+void MSProductClass::keepOnlySiteDetermIons(set<string> &ions) {
+	set<string>::iterator sdIter; //site-determining iter
+	map<string, double> keepers;
+	map<string, double>::iterator m;
+	string tmp;
+	int f;
 
 	// b-ions
-	tmpIonMap = new map<string, double>;
-	tmpStrSet = new set<string>;
-	for(v = B.begin(); v != B.end(); v++) {
-		// find this site-determining ion inside of the original b_ion_set
-		// Then record it's various forms (ie: different charge states)
-		for(setIter = b_ion_set.begin(); setIter != b_ion_set.end(); setIter++) {
+	for(m = b_ions.begin(); m != b_ions.end(); m++) {
+		f = m->first.find_first_of("/");
 
-			boost::regex_match(*setIter, matches, ion_regex);
-			tmp.clear();
-			tmp.assign(matches[1].first, matches[1].second);
+		if(f != string::npos) tmp = m->first.substr(0,f);
+		else tmp = m->first;
 
-			if(tmp.compare(*v) == 0) {
-				tmpIonMap->insert(pair<string, double>(*setIter, b_ions[ *setIter ]));
-				tmpStrSet->insert(*setIter);
-			}
-		}
+		if( !containsSTY(tmp) ) continue;
 
+		sdIter = ions.find(tmp);
+		if(sdIter != ions.end()) keepers[ m->first ] = m->second;
 	}
-	b_ion_set.clear();
-	b_ion_set = *tmpStrSet;
-	delete(tmpStrSet);
-	b_ions.clear();
-	b_ions = *tmpIonMap;
-	delete(tmpIonMap);
+
 
 	// y-ions
-	tmpIonMap = new map<string, double>;
-	tmpStrSet = new set<string>;
-	for(v = Y.begin(); v != Y.end(); v++) {
-		// find this site-determining ion inside of the original y_ion_set
-		// Then record it's various forms (ie: different charge states)
-		for(setIter = y_ion_set.begin(); setIter != y_ion_set.end(); setIter++) {
+	for(m = y_ions.begin(); m != y_ions.end(); m++) {
+		f = m->first.find_first_of("/");
 
-			boost::regex_match(*setIter, matches, ion_regex);
-			tmp.clear();
-			tmp.assign(matches[1].first, matches[1].second);
+		if(f != string::npos) tmp = m->first.substr(0,f);
+		else tmp = m->first;
 
-			if(tmp.compare(*v) == 0) {
-				tmpIonMap->insert(pair<string, double>(*setIter, y_ions[ *setIter ]));
-				tmpStrSet->insert(*setIter);
-			}
-		}
+		if( !containsSTY(tmp) ) continue;
+
+		sdIter = ions.find(tmp);
+		if(sdIter != ions.end()) keepers[ m->first ] = m->second;
 	}
-	y_ion_set.clear();
-	y_ion_set = *tmpStrSet;
-	delete(tmpStrSet);
+
+	// keep only the ions in the 'keepers' object
+	b_ions.clear();
 	y_ions.clear();
-	y_ions = *tmpIonMap;
-	delete(tmpIonMap);
 
+	for(m = keepers.begin(); m != keepers.end(); m++) {
+		if(m->first.at(0) == 'b') b_ions[ m->first ] = m->second;
 
+		if(m->first.at(0) == 'y') y_ions[ m->first ] = m->second;
 
-	if(g_DEBUG_MODE) {
-		cerr << "AFTER site determining ion trimming:\n";
-		for(map<string, double>::iterator mm = b_ions.begin(); mm != b_ions.end(); mm++) {
-			cerr << mm->first << endl;
+		if(g_DEBUG_MODE) {
+			cerr << "|" << seq << "|\t" << m->first << "\t" << m->second << endl;
 		}
-		for(map<string, double>::iterator mm = y_ions.begin(); mm != y_ions.end(); mm++) {
-			cerr << mm->first << endl;
-		}
-		cerr << endl;
 	}
 }
+
+
+
+// Function generates site-determining ions for the sequence in 'seq'
+//void MSProductClass::makeSiteDetermIons() {
+//	int N = (signed)seq.length();
+//	vector<int> v_b(N,0), v_y(N,0); // initalized to length N with zero's
+//	vector<string> B, Y;
+//	int ctr;
+//	size_t found;
+//	string modChars = "sty234567890@#$%&;?~";
+//	string b_ion_str, y_ion_str, tmp, rev_str;
+//	int numPhos = 0;
+//
+//	boost::regex ion_regex("^([by].\\d+:\\w+)(-.*)?(\/\+\\d)?");
+//	boost::smatch matches;
+//
+//
+//	// compute number of phosphorylation sites in string
+//	for(int i = 0; i < N; i++) {
+//		char c = seq.at(i);
+//		found = modChars.find(c);
+//		if(found != string::npos) numPhos++;
+//	}
+//
+//
+//	ctr = 0;
+//	for(int i = 0; i < N; i++) {
+//		char c = seq.at(i);
+//		found = modChars.find(c);
+//		if(found != string::npos) ctr++;
+//		v_b.at(i) = ctr;
+//	}
+//
+//
+//	ctr = 0;
+//	for(int i = N-1; i > -1; i--) {
+//		char c = seq.at(i);
+//		found = modChars.find(c);
+//		if(found != string::npos) ctr++;
+//		v_y.at(i) = ctr;
+//	}
+//
+//
+//	/*
+//	 * Wherever the v_b and v_y vectors have a number equal to 'numPhos'
+//	 * for this peptide, that is the ion ladder number for a site-determining ion
+//	 */
+//	// B-ions
+//	for(int i = 1; i < N-1; i++) { // we do not include/keep the last ion (which is the whole peptide)
+//		if( v_b.at(i) == numPhos ) {
+//			b_ion_str = seq.substr(0, (i+1) );
+//			tmp = "b^" + int2string((i+1)) + ":" + b_ion_str;
+//			B.push_back(tmp);
+//		}
+//	}
+//
+//	// Y-ions (we have to work from the C-term (right-hand-side) of the string)
+//	for(int i = N-1; i > 0; i--) {
+//		if(v_y.at(i) == numPhos) {
+//			int j = N - i;
+//			y_ion_str = seq.substr(i, j);
+//			tmp = "y^" + int2string(j) + ":" + y_ion_str;
+//			Y.push_back(tmp);
+//		}
+//	}
+//
+//
+//	if(g_DEBUG_MODE) {
+//		cerr << "\nBEFORE site determining ion trimming:\n";
+//		for(map<string, double>::iterator mm = b_ions.begin(); mm != b_ions.end(); mm++) {
+//			cerr << mm->first << endl;
+//		}
+//		for(map<string, double>::iterator mm = y_ions.begin(); mm != y_ions.end(); mm++) {
+//			cerr << mm->first << endl;
+//		}
+//		cerr << endl;
+//	}
+//
+//
+//
+//	/*
+//	 * Now that we have the site specific ion strings, we will clean out
+//	 * the 'b/y_ion_set' sets and store only these cases
+//	 */
+//	map<string, double> *tmpIonMap = NULL;
+//	set<string> *tmpStrSet = NULL;
+//	set<string>::iterator setIter;
+//	vector<string>::iterator v;
+//
+//	// b-ions
+//	tmpIonMap = new map<string, double>;
+//	tmpStrSet = new set<string>;
+//	for(v = B.begin(); v != B.end(); v++) {
+//		// find this site-determining ion inside of the original b_ion_set
+//		// Then record it's various forms (ie: different charge states)
+//		for(setIter = b_ion_set.begin(); setIter != b_ion_set.end(); setIter++) {
+//
+//			boost::regex_match(*setIter, matches, ion_regex);
+//			tmp.clear();
+//			tmp.assign(matches[1].first, matches[1].second);
+//
+//			if(tmp.compare(*v) == 0) {
+//				tmpIonMap->insert(pair<string, double>(*setIter, b_ions[ *setIter ]));
+//				tmpStrSet->insert(*setIter);
+//			}
+//		}
+//
+//	}
+//	b_ion_set.clear();
+//	b_ion_set = *tmpStrSet;
+//	delete(tmpStrSet);
+//	b_ions.clear();
+//	b_ions = *tmpIonMap;
+//	delete(tmpIonMap);
+//
+//	// y-ions
+//	tmpIonMap = new map<string, double>;
+//	tmpStrSet = new set<string>;
+//	for(v = Y.begin(); v != Y.end(); v++) {
+//		// find this site-determining ion inside of the original y_ion_set
+//		// Then record it's various forms (ie: different charge states)
+//		for(setIter = y_ion_set.begin(); setIter != y_ion_set.end(); setIter++) {
+//
+//			boost::regex_match(*setIter, matches, ion_regex);
+//			tmp.clear();
+//			tmp.assign(matches[1].first, matches[1].second);
+//
+//			if(tmp.compare(*v) == 0) {
+//				tmpIonMap->insert(pair<string, double>(*setIter, y_ions[ *setIter ]));
+//				tmpStrSet->insert(*setIter);
+//			}
+//		}
+//	}
+//	y_ion_set.clear();
+//	y_ion_set = *tmpStrSet;
+//	delete(tmpStrSet);
+//	y_ions.clear();
+//	y_ions = *tmpIonMap;
+//	delete(tmpIonMap);
+//
+//
+//
+//	if(g_DEBUG_MODE) {
+//		cerr << "AFTER site determining ion trimming:\n";
+//		for(map<string, double>::iterator mm = b_ions.begin(); mm != b_ions.end(); mm++) {
+//			cerr << mm->first << endl;
+//		}
+//		for(map<string, double>::iterator mm = y_ions.begin(); mm != y_ions.end(); mm++) {
+//			cerr << mm->first << endl;
+//		}
+//		cerr << endl;
+//	}
+//}
 

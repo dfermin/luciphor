@@ -21,11 +21,6 @@
 using namespace std;
 using namespace boost;
 
-const double H = 1.00727;
-const double OH = 17.002745;
-const double e = 0.00054858026;
-const double H2O = 18.010015;
-
 const double MZ_WIN = 100.00;
 const double MZ_TOLERANCE = 0.6;   // this is constant as defined in the Ascore paper
 
@@ -42,13 +37,6 @@ AscoreClass::AscoreClass(string txt, int Z, double ntm) {
 
 	mz_err = MZ_TOLERANCE;
 
-	neutralLossMap[ "-H2O" ] =   -1.0 * H2O;
-	neutralLossMap[ "+H2O" ] = H2O;
-	neutralLossMap[ "-H3PO4" ] = -97.976895;
-	neutralLossMap[ "-HPO3" ] =  -79.966330;
-	neutralLossMap[ "-NH3" ] =   -17.026549;
-
-
 	// figure out the number of reported and potential phosphorylation sites
 	// in the sequence
 	numPotentialSites = 0;
@@ -64,11 +52,20 @@ AscoreClass::AscoreClass(string txt, int Z, double ntm) {
 
 	seq_mass = getMass() + nterm_mass;
 	makeIons(); // fragment the given sequence into B and Y ions
+
+	if(g_DEBUG_MODE) {
+		cerr << endl << seq << endl;
+		map<string, double>::iterator m;
+		for(m = b_ions.begin(); m != b_ions.end(); m++) cerr << m->first << "\t" << m->second << endl;
+		for(m = y_ions.begin(); m != y_ions.end(); m++) cerr << m->first << "\t" << m->second << endl;
+		cerr << endl;
+	}
+
 }
 
 // Function returns the mass of the current peptide string recorded in 'seq'
 double AscoreClass::getMass() {
-	double ret = H + H2O;
+	double ret = H2O;
 	int N = (signed)seq.length();
 
 	for(int i = 0; i < N; i++) {
@@ -94,84 +91,13 @@ void AscoreClass::makeIons() {
 		if( (signed)y.length() == N ) continue;
 
 		generateIonsMZ(b, 'b');
+		//generateNL_ionsMZ(b, 'b'); // neutral loss peaks don't help Ascore, so comment out
 
 		generateIonsMZ(y, 'y');
+		//generateNL_ionsMZ(y, 'y'); // neutral loss peaks don't help Ascore, so comment out
 	}
 }
 
-
-// Function analyzes the given ion string to determine if it can undergo a
-// neutral loss of any kind. If it can, that potential neutral loss is recorded.
-//void AscoreClass::generate_NL_ionsMZ(string ion, char ion_type) {
-//	double mass, mz_value;
-//	int N = (signed) ion.length();
-//	string Nstr = int2string(N);
-//	string new_ion;
-//	bool hasPhospho = false;
-//
-//	int S, T, Y;
-//
-//	// compute mass of ion
-//	mass = 0.0;
-//	for(int i = 0; i < N; i++) { mass += AAmass[ ion.at(i) ]; }
-//
-//	// determine if the ion contains an STY letter, if it does, then the loss
-//	// of a phospho-group is possible. Otherwise, the ion can only lose
-//	// NH3 or H2O/H
-//	S = 0; T = 0; Y = 0; // count the number of STY in the ion
-//	for(int i = 0; i < N; i++) {
-//		if( ion.at(i) == 's') S++;
-//		if( ion.at(i) == 't') T++;
-//		if( ion.at(i) == 'y') Y++;
-//	}
-//	if( (S+T+Y) > 0 ) hasPhospho = true; // has at least 1 phosphorylated AA
-//
-//
-//	double extraProton = 0; // Computes: ( H * (z-1) ) <- you need this for dealing with multiple charge states;
-//	for(int z = 1; z < charge + 1; z++) {
-//
-//		extraProton = ( H * (z-1) );
-//
-//		if(ion_type == 'b') {
-//
-//			// this ion contains a phospho group that can undergo neutral loss
-//			if(hasPhospho) {
-//				new_ion.clear();
-//				new_ion = "b^" + Nstr + ":" + ion + "-H3PO4";
-//				if(z > 1) new_ion += "/+" + int2string(z);
-//
-//				mz_value = mass + H - e + extraProton;
-//				mz_value += neutralLossMap[ "-H3PO4" ];
-//				mz_value /= z;
-//
-//				// record the -H3PO4 neutral loss
-//				if( (mz_value > MIN_MZ) && (N > 1) ) {
-//					b_ions[ new_ion ] = mz_value;
-//					b_ion_set.insert(new_ion);
-//				}
-//			} // end if(hasPhospho)
-//		} // end b-ion
-//		else if(ion_type == 'y') {
-//
-//			// this ion contains a phospho group that can undergo neutral loss
-//			if(hasPhospho) {
-//				new_ion.clear();
-//				new_ion = "y^" + Nstr + ":" + ion + "-H3PO4";
-//				if(z > 1) new_ion += "/+" + int2string(z);
-//
-//				mz_value = mass + H2O + H + extraProton;
-//				mz_value += neutralLossMap[ "-H3PO4" ];
-//				mz_value /= z;
-//
-//				// record the -H3PO4 neutral loss
-//				if( (mz_value > MIN_MZ) && (N > 1) ) {
-//					y_ions[ new_ion ] = mz_value;
-//					y_ion_set.insert(new_ion);
-//				}
-//			} // end if(hasPhospho)
-//		} // end y-ion
-//	}
-//}
 
 
 // function generates the theoretical m/z value for the given ion string.
@@ -201,13 +127,14 @@ void AscoreClass::generateIonsMZ(string ion, char ion_type) {
 		if(ion_type == 'b') {
 			mz_value = mass + H - e + ( H * (z-1) ) + nterm_mass;
 			mz_value /= z;
+
 			if( (mz_value > MIN_MZ) && (N > 1)) {
 
 				new_ion.clear();
 				new_ion = "b^" + Nstr + ":" + ion;
 				if(z > 1) { new_ion += "/+" + int2string(z); }
 
-				b_ions[ new_ion ] = mz_value;
+				b_ions[ new_ion ] = round_dbl(mz_value, 2);
 				b_ion_set.insert(new_ion);
 			}
 		}
@@ -221,7 +148,7 @@ void AscoreClass::generateIonsMZ(string ion, char ion_type) {
 				new_ion = "y^" + Nstr + ":" + ion;
 				if(z > 1) { new_ion += "/+" + int2string(z); }
 
-				y_ions[ new_ion ] = mz_value;
+				y_ions[ new_ion ] = round_dbl(mz_value, 2);
 				y_ion_set.insert(new_ion);
 			}
 		}
@@ -229,46 +156,275 @@ void AscoreClass::generateIonsMZ(string ion, char ion_type) {
 }
 
 
+// Function generates neutral loss fragment ions for the given sequence
+void AscoreClass::generateNL_ionsMZ(string ion, char ion_type) {
+	double mass, mz_value;
+	int N = (signed) ion.length();
+	string Nstr = int2string(N);
+	string new_ion;
+
+	bool hasPhospho = false;
+	bool looseNH3 = false;
+	bool looseH2O = false;
 
 
-
-// Function records the maximum M/Z value in the stored spectrum
-void AscoreClass::recordMZrange() {
-	map<double, double>::iterator curPeak;
-	list<double> *Lptr1, *Lptr2;
-	int a1, remainder;
-	double x1;
-
-	// Get the max m/z for spectrum, also record spectrum in bi-directional map
-	Lptr1 = new list<double>;
-	Lptr2 = new list<double>;
-
-	for(curPeak = local_spectrum.begin(); curPeak != local_spectrum.end(); curPeak++) {
-		Lptr1->push_back( curPeak->first );
-		Lptr2->push_back( curPeak->second );
+	int H3PO4ctr = 0;
+	for(int i = 0; i < N; i++) {
+		if(ion.at(i) == 's') H3PO4ctr++;
+		if(ion.at(i) == 't') H3PO4ctr++;
+		if(ion.at(i) == 'y') H3PO4ctr++;
 	}
-	Lptr1->sort();
-	Lptr2->sort();
-
-	// get minMZ
-	a1 = (int) Lptr1->front();
-	remainder = a1 % 100;
-	x1 = a1 - remainder;
-	minMZ = fmax( MIN_MZ, x1 );
-
-	// get maxMZ
-	a1 = (int) Lptr1->back();
-	remainder = a1 % 100;
-	x1 = a1 - remainder + 100;
-	maxMZ = x1;
+	if(H3PO4ctr > 0) hasPhospho = true;
 
 
-	minIntensity = Lptr2->front();
-	maxIntensity = Lptr2->back();
+	int NH3ctr = 0;
+	int H2Octr = 0;
+	for(int i = 0; i < N; i++) {
+		if(ion.at(i) == 'R') NH3ctr++;
+		if(ion.at(i) == 'K') NH3ctr++;
+		if(ion.at(i) == 'Q') NH3ctr++;
+		if(ion.at(i) == 'N') NH3ctr++;
 
-	delete(Lptr1);
-	delete(Lptr2);
+		if(ion.at(i) == 'S') H2Octr++;
+		if(ion.at(i) == 'T') H2Octr++;
+		if(ion.at(i) == 'E') H2Octr++;
+		if(ion.at(i) == 'D') H2Octr++;
+	}
+
+	if( NH3ctr > 0 ) looseNH3 = true;
+	if( H2Octr > 0 ) looseH2O = true;
+
+
+
+	for(int z = 1; z < (charge + 0); z++) { // was (charge + 1) 2011.12.05
+			mass = 0.0;
+			mz_value = 0.0;
+
+			for(int i = 0; i < N; i++) {
+				mass += AAmass[ ion.at(i) ];
+			}
+
+			if(ion_type == 'b') {
+
+				if(hasPhospho) {
+					new_ion.clear();
+					new_ion = "b^" + Nstr + ":" + ion + "-H3PO4";
+					if(z > 1) new_ion += "/+" + int2string(z);
+
+					mz_value = mass + H - e + ( H * (z-1) ) + nterm_mass;
+					mz_value += -H3PO4;
+					mz_value /= z;
+
+					if( (mz_value > MIN_MZ) && (N > 1) ) {
+						b_ions[ new_ion ] = mz_value;
+						b_ion_set.insert(new_ion);
+					}
+				} // end phospho NL
+
+
+				if(looseNH3) {
+					new_ion.clear();
+					new_ion = "b^" + Nstr + ":" + ion + "-NH3";
+					if(z > 1) new_ion += "/+" + int2string(z);
+
+					mz_value = mass + H - e + ( H * (z-1) ) + nterm_mass;
+					mz_value += -NH3;
+					mz_value /= z;
+
+					if( (mz_value > MIN_MZ) && (N > 1) ) {
+						b_ions[ new_ion ] = mz_value;
+						b_ion_set.insert(new_ion);
+					}
+				} // end looseNH3
+
+
+				if(looseH2O) {
+					new_ion.clear();
+					new_ion = "b^" + Nstr + ":" + ion + "-H2O";
+					if(z > 1) new_ion += "/+" + int2string(z);
+
+					mz_value = mass + H - e + ( H * (z-1) ) + nterm_mass;
+					mz_value += -H2O;
+					mz_value /= z;
+
+					if( (mz_value > MIN_MZ) && (N > 1) ) {
+						b_ions[ new_ion ] = mz_value;
+						b_ion_set.insert(new_ion);
+					}
+				} // end looseH2O
+			} // end b-ion
+
+
+
+			if(ion_type == 'y') {
+
+				if(hasPhospho) {
+					new_ion.clear();
+					new_ion = "y^" + Nstr + ":" + ion + "-H3PO4";
+					if(z > 1) new_ion += "/+" + int2string(z);
+
+					mz_value = mass + H2O + H + ( H * (z-1) );
+					mz_value += -H3PO4;
+					mz_value /= z;
+
+					if( (mz_value > MIN_MZ) && (N > 1)) {
+						y_ions[ new_ion ] = round_dbl(mz_value, 2);
+						y_ion_set.insert(new_ion);
+					}
+				} // end hasPhospho
+
+
+				if(looseNH3) {
+					new_ion.clear();
+					new_ion = "y^" + Nstr + ":" + ion + "-NH3";
+					if(z > 1) new_ion += "/+" + int2string(z);
+
+					mz_value = mass + H2O + H + ( H * (z-1) );
+					mz_value += -NH3;
+					mz_value /= z;
+
+					if( (mz_value > MIN_MZ) && (N > 1)) {
+						y_ions[ new_ion ] = round_dbl(mz_value, 2);
+						y_ion_set.insert(new_ion);
+					}
+				} // end looseNH3
+
+
+				if(looseH2O) {
+					new_ion.clear();
+					new_ion = "y^" + Nstr + ":" + ion + "-H2O";
+					if(z > 1) new_ion += "/+" + int2string(z);
+
+					mz_value = mass + H2O + H + ( H * (z-1) );
+					mz_value += -H2O;
+					mz_value /= z;
+
+					if( (mz_value > MIN_MZ) && (N > 1)) {
+						y_ions[ new_ion ] = round_dbl(mz_value, 2);
+						y_ion_set.insert(new_ion);
+					}
+				} // end looseH2O
+			} //end y-ion
+		}
 }
+
+
+
+
+
+// Function records the passe spectrum into the local spectrum map
+void AscoreClass::assignSpectrumMap(map<double, vector<double> > *ptr) {
+
+	map<double, vector<double> >::iterator curPeak;
+	map<double, double>::iterator m_iter;
+	list<double> mzL;
+	double mz, intensity, E;
+	double x1, x2, remainder;
+
+	minMZ = 0;
+	maxMZ = 0;
+	local_spectrum.clear();
+	maxIntensity = 0;
+
+	for(curPeak = ptr->begin(); curPeak != ptr->end(); curPeak++) {
+		mz = round_dbl( curPeak->first, 2 );
+		intensity = curPeak->second.at(0);
+
+		if(intensity > maxIntensity) maxIntensity = intensity;
+
+		m_iter = local_spectrum.find(mz);
+		if(m_iter != local_spectrum.end()) {
+			if(intensity > m_iter->second) local_spectrum[ mz ] = intensity;
+		}
+
+		local_spectrum[ mz ] = intensity;
+
+		mzL.push_back(mz);
+	}
+
+	mzL.sort();
+
+	x1 = mzL.front();
+	remainder = fmod(x1,100.0);
+	minMZ = x1 - remainder;
+
+	x2 = mzL.back();
+	remainder = fmod(x2,100.0);
+	maxMZ = x2 - remainder + 100.0;
+
+	// remove precursor neutral loss peaks
+	removePrecursorNL();
+
+	// normalize intensities to range of 0-100
+	for(m_iter = local_spectrum.begin(); m_iter != local_spectrum.end(); m_iter++) {
+		E = runif() * 1/10000; // random noise to make unique peak intensities
+		intensity = ( (m_iter->second / maxIntensity) * 100.0 ) + E;
+		m_iter->second = intensity;
+	}
+
+}
+
+
+
+// Function removes the precursor neutral loss peaks (if any are present)
+void AscoreClass::removePrecursorNL() {
+	map<double, double> candPeaks;
+	map<double, double>::iterator curPeak;
+
+	list<double> L;
+
+	double mz, intensity, a, b;
+	double maxI = 0;
+	double Z = (double)charge;
+
+	double precursor_mz = (seq_mass + (H*Z)) / Z;
+	double precursor_H3PO4_mz = precursor_mz - (H3PO4/Z);
+	double precursor_H2O_mz   = precursor_mz - (H2O/Z);
+
+	double *massPtr = NULL;
+
+	for(int i = 0; i < 2; i++) {
+
+		if(i == 0) massPtr = &precursor_H2O_mz;
+		else massPtr = &precursor_H3PO4_mz;
+
+		// prepare for next iteration
+		candPeaks.clear();
+		L.clear();
+		maxI = 0;
+
+		for(curPeak = local_spectrum.begin(); curPeak != local_spectrum.end(); curPeak++) {
+
+			mz = curPeak->first;
+			intensity = curPeak->second;
+
+			a = *massPtr - mz_err;
+			b = *massPtr + mz_err;
+
+			if( (mz >= a) && (mz <= b) ) { // candidate peak for neutral loss
+				candPeaks[ intensity ] = mz;
+				L.push_back(intensity);
+			}
+		}
+
+		if( !candPeaks.empty() ) {
+			L.sort(); // sorted low to high
+			maxI = L.back(); // most intense peak in candPeaks
+
+			mz = candPeaks[ maxI ];
+			local_spectrum.erase( mz );
+		}
+	}
+
+
+	// need to record the maximum peak intensity in spectrum
+	maxIntensity = 0;
+	for(curPeak = local_spectrum.begin(); curPeak != local_spectrum.end(); curPeak++) {
+		if(curPeak->second > maxIntensity) maxIntensity = curPeak->second;
+	}
+
+}
+
 
 
 
@@ -280,58 +436,50 @@ void AscoreClass::getSpectrumAt_X_depth(int numPeaks, map<double, double> *Mptr)
 	double mz, intensity;
 	map<double, double>::iterator curPeak;
 	map<double, double> bestPeaksMap;
-	map<double, list<double> > deepMap;
-	map<double, list<double> >::iterator dmIter;
+	map<double, double> cp_I2M, cp_M2I;  // candidate peaks Intensity-to-M/Z or M/Z-to-Intensity
+	map<double, double>::iterator candIter;
 	list<double> *Lptr = NULL;
 	list<double>::iterator iterL;
 
-	double start_mz = round_dbl(minMZ, 0);
-	double end_mz   = round_dbl(maxMZ, 0);
-
-	for(curMZ = start_mz; curMZ < (end_mz + MZ_WIN); curMZ += MZ_WIN) {
+	for(curMZ = minMZ; curMZ < (maxMZ + MZ_WIN); curMZ += MZ_WIN) {
 		nextMZ = curMZ + MZ_WIN;
 
 		mz = 0;
 		intensity = 0;
-		deepMap.clear();
-		bestPeaksMap.clear();
-
-		for(curPeak = local_spectrum.begin(); curPeak != local_spectrum.end(); curPeak++) {
-			// according to Ascore paper "only one peak per one m/z unit was allowed"
-			mz = round_dbl(curPeak->first, 0);
-			intensity = curPeak->second;
-
-			if( (mz >= curMZ) && (mz < nextMZ) ) { // candiate peak
-				dmIter = deepMap.find(mz);
-				if(dmIter == deepMap.end()) deepMap[ mz ].push_back(intensity);
-				else  dmIter->second.push_back(intensity);
-			}
-		}
+		cp_M2I.clear();
+		cp_I2M.clear();
 
 		Lptr = new list<double>;
 
-		//select the most intense peak in each list of deepMap
-		for(dmIter = deepMap.begin(); dmIter != deepMap.end(); dmIter++) {
-			mz = dmIter->first;
-			dmIter->second.sort();
-			bestPeaksMap[ mz ] = dmIter->second.back();
-			Lptr->push_back( bestPeaksMap[ mz ] );
+		for(curPeak = local_spectrum.begin(); curPeak != local_spectrum.end(); curPeak++) {
+			mz = curPeak->first;
+			intensity = curPeak->second;
+
+			if( (mz >= curMZ) && (mz < nextMZ) ) {
+				Lptr->push_back(intensity);
+				cp_M2I[ mz ] = intensity;
+				cp_I2M[ intensity ] = mz;
+			}
 		}
 
-		// bestPeakMap now contains the most intense peaks for this mz window range
-		// pick the top 'i' most intense peaks in this window
+		if( ((signed)cp_M2I.size()) != ((signed)cp_I2M.size()) ) {
+			cerr << "ERROR cp_M2I != cp_I2M:  cannot score with Ascore\n";
+			exit;
+		}
+
+		// pick the top 'i' most intense peaks in this window out of bimap object
 		Lptr->sort();
 		Lptr->reverse();
 		int i = numPeaks;
 		iterL = Lptr->begin();
 		while(i > 0) {
 			intensity = *iterL;
-			for(curPeak = bestPeaksMap.begin(); curPeak != bestPeaksMap.end(); curPeak++) {
-				if(curPeak->second == intensity) {
-					mz = curPeak->first;
-					Mptr->insert(pair<double, double>(mz, intensity));
-					break;
-				}
+
+			candIter = cp_I2M.find(intensity);
+
+			if(candIter != cp_I2M.end()) {
+				mz = candIter->second;
+				Mptr->insert(pair<double, double>(mz, intensity));
 			}
 			iterL++;
 			i--;
@@ -373,7 +521,7 @@ void AscoreClass::recordBestSpectrum(int bestPeakDepth) {
 
 	// iterate over b-ions
 	for(curTheoPeak = b_ions.begin(); curTheoPeak != b_ions.end(); curTheoPeak++) {
-		expected_mz = curTheoPeak->second;
+		expected_mz = round_dbl(curTheoPeak->second, 0);
 		a = expected_mz - mz_err;
 		b = expected_mz + mz_err;
 
@@ -396,7 +544,7 @@ void AscoreClass::recordBestSpectrum(int bestPeakDepth) {
 
 	// iterate over y-ions
 	for(curTheoPeak = y_ions.begin(); curTheoPeak != y_ions.end(); curTheoPeak++) {
-		expected_mz = curTheoPeak->second;
+		expected_mz = round_dbl(curTheoPeak->second, 0);
 		a = expected_mz - mz_err;
 		b = expected_mz + mz_err;
 
@@ -458,26 +606,26 @@ void AscoreClass::recordBestSpectrum(int bestPeakDepth) {
 
 
 
-// Function returns the peptide score for the currently assigned phospho permutation
-double AscoreClass::getPeptideScore() {
+// Function returns a deque of the peptide scores for the currently assigned
+// phospho permutation at each peak depth
+deque<double> AscoreClass::getPeptideScore() {
 
 	map<double, double>::iterator curPeak;
 	map<string, double>::iterator curTheoPeak;
 	map<double, double> *curPeakMap = NULL;
 
+	deque<double> ret(10,0); // deque initialized to 10 zeros
+
+	double maxScore = 0;
 	double expected_mz, a, b, mz;
 	set<double> matched_ions;
-	double ret = 0.0;
 	double negLogProb = 0.0;
 	double prob = 0.0;
 	int numMatchedPeaks = 0;
+	int bestDepth = 0;
 
-	double depthWt[] = { 0, 0.5, 0.75, 1, 1, 1, 1, 0.75, 0.5, 0.25, 0.25 };
+	double depthWt[] = { 0.5, 0.75, 1, 1, 1, 1, 0.75, 0.5, 0.25, 0.25 };
 
-	// skip this PSM, it is an unambiguous case
-	//if(numPotentialSites == numPhosphorylations) return 1000;
-	
-	
 	for(int numPeaks = 1; numPeaks <= 10; numPeaks++) { // number of peaks per m/z window
 
 		// create the map for this iteration
@@ -496,8 +644,8 @@ double AscoreClass::getPeptideScore() {
 				mz = curPeak->first;
 				if( (mz >= a) && (mz <= b) ) matched_ions.insert(expected_mz);
 			}
-		}
 
+		}
 
 		// iterate over y-ions
 		for(curTheoPeak = y_ions.begin(); curTheoPeak != y_ions.end(); curTheoPeak++) {
@@ -519,93 +667,22 @@ double AscoreClass::getPeptideScore() {
 		else {
 			int N = ((signed) b_ions.size()) + ((signed) y_ions.size());
 
-			double pr = (((double) numPeaks) / MZ_WIN) * g_MZ_ERR; // this equation is from Alexey's old python code
-			//double pr = getPhosphoRS_pr();
+			double pr = getPeakProb( (double)numPeaks );
 
 			prob = cum_binomial_prob(N, k, pr);
-			negLogProb = ( -10.0 * log(prob) ) * depthWt[ numPeaks ];
+			negLogProb = ( -10.0 * log(prob) ) * depthWt[ (numPeaks - 1) ];
 		}
 
-		ret += negLogProb;
+		ret.at( (numPeaks-1) ) = negLogProb;
+
+		if(negLogProb > maxScore) maxScore = negLogProb;
+
 		delete(curPeakMap); curPeakMap = NULL;
 	}
 
+
 	return(ret);
 }
-
-
-// Function returns a vector of the peptide score (without weights) for each peak depth
-vector<double> AscoreClass::getPeptideScoreVec() {
-	vector<double> ret;
-	map<double, double>::iterator curPeak;
-	map<string, double>::iterator curTheoPeak;
-	map<double, double> *curPeakMap = NULL;
-	ascoreStruct *ASS = NULL;
-
-	double expected_mz, a, b, mz;
-	set<double> matched_ions;
-
-	for(int numPeaks = 1; numPeaks <= 10; numPeaks++) { // number of peaks per m/z window
-
-		// create the map for this iteration
-		curPeakMap = new map<double, double>;
-		getSpectrumAt_X_depth(numPeaks, curPeakMap);
-
-		// prepare struct for storing results
-		ASS = new ascoreStruct();
-		ASS->negLogProb = 0.0;
-		ASS->numMatchedPeaks = 0.0;
-		ASS->numPeaksPerBin = numPeaks;
-
-		matched_ions.clear(); // prep for next iteration
-
-		// iterate over b-ions
-		for(curTheoPeak = b_ions.begin(); curTheoPeak != b_ions.end(); curTheoPeak++) {
-			expected_mz = curTheoPeak->second;
-			a = expected_mz - mz_err;
-			b = expected_mz + mz_err;
-
-			for(curPeak = curPeakMap->begin(); curPeak != curPeakMap->end(); curPeak++) {
-				mz = curPeak->first;
-				if( (mz >= a) && (mz <= b) ) matched_ions.insert(expected_mz);
-			}
-		}
-
-
-		// iterate over y-ions
-		for(curTheoPeak = y_ions.begin(); curTheoPeak != y_ions.end(); curTheoPeak++) {
-			expected_mz = curTheoPeak->second;
-			a = expected_mz - mz_err;
-			b = expected_mz + mz_err;
-
-			for(curPeak = curPeakMap->begin(); curPeak != curPeakMap->end(); curPeak++) {
-				mz = curPeak->first;
-				if( (mz >= a) && (mz <= b) ) matched_ions.insert(expected_mz);
-			}
-		}
-
-		ASS->numMatchedPeaks = (signed)matched_ions.size();
-
-		// compute the cumulative binomial probability
-		int k = ASS->numMatchedPeaks;
-		if(k == 0) { ASS->negLogProb = 0; }
-		else {
-			int N = ((signed) b_ions.size()) + ((signed) y_ions.size());
-			double pr = (((double) numPeaks) / MZ_WIN) * g_MZ_ERR; // this equation is from Alexey's old python code
-			//double pr = getPhosphoRS_pr();
-			//double pr = ((double)numPeaks) / MZ_WIN;  // used in original Ascore manuscript
-
-			double prob = cum_binomial_prob(N, k, pr);
-			ASS->negLogProb = -10.0 * log(prob);
-		}
-		ret.push_back( ASS->negLogProb );
-		delete(ASS); ASS = NULL;
-		delete(curPeakMap); curPeakMap = NULL;
-	} // done iterating over peak depths
-
-	return ret;
-}
-
 
 
 
@@ -629,7 +706,7 @@ double AscoreClass::getFinalAscore(int optimalPeakDepth) {
 	curPeakMap = new map<double, double>;
 	getSpectrumAt_X_depth(optimalPeakDepth, curPeakMap);
 
-	getSiteDetermIons();
+	matched_spectrum.clear();
 
 	/********************* Begin peak matching part ***************************
 	 *
@@ -643,10 +720,12 @@ double AscoreClass::getFinalAscore(int optimalPeakDepth) {
 	deque<peakStruct> *tmpDeq = NULL;
 	deque<peakStruct>::iterator iterD;
 
+	//////////////////////////////////
 	// b-ions
+	//////////////////////////////////
 	candMatchedPeaks.clear();
 	for(curTheoPeak = b_ions.begin(); curTheoPeak != b_ions.end(); curTheoPeak++) {
-		expected_mz = curTheoPeak->second;
+		expected_mz = round_dbl( curTheoPeak->second, 0 );
 		curIon = curTheoPeak->first;
 		a = expected_mz - mz_err;
 		b = expected_mz + mz_err;
@@ -730,10 +809,12 @@ double AscoreClass::getFinalAscore(int optimalPeakDepth) {
 	}
 
 
+	///////////////////////////
 	// y-ions
+	//////////////////////////
 	candMatchedPeaks.clear();
 	for(curTheoPeak = y_ions.begin(); curTheoPeak != y_ions.end(); curTheoPeak++) {
-		expected_mz = curTheoPeak->second;
+		expected_mz = round_dbl( curTheoPeak->second, 0 );
 		curIon = curTheoPeak->first;
 		a = expected_mz - mz_err;
 		b = expected_mz + mz_err;
@@ -806,7 +887,6 @@ double AscoreClass::getFinalAscore(int optimalPeakDepth) {
 			iter_m = matched_spectrum.find(matchedPeak->mz);
 			if(iter_m == matched_spectrum.end())
 				matched_spectrum[ matchedPeak->mz ] = *matchedPeak;
-				//matched_spectrum.insert(pair<double, peakStruct>(matchedPeak->mz, *matchedPeak));
 			else {
 				if(matchedPeak->intensity > iter_m->second.intensity)
 					matched_spectrum[ matchedPeak->mz ] = *matchedPeak;
@@ -819,14 +899,6 @@ double AscoreClass::getFinalAscore(int optimalPeakDepth) {
 	/*********************** End peak matching part ***************************/
 
 
-	if(g_DEBUG_MODE) {
-		cerr << endl << seq << endl;
-		cerr << "m/z\tion string\tintensity\n";
-		for(map<double, peakStruct>::iterator I = matched_spectrum.begin(); I != matched_spectrum.end(); I++) {
-			cerr << I->first << "\t" << I->second.ionStr << "\t" << I->second.intensity << endl;
-		}
-	}
-
 	matched_ions = (signed) matched_spectrum.size();
 
 	if(matched_ions == 0) ret = 0.0;
@@ -834,13 +906,7 @@ double AscoreClass::getFinalAscore(int optimalPeakDepth) {
 		double k = matched_ions;
 		int N = (signed)b_ion_set.size() + (signed)y_ion_set.size();
 
-		// this is what is published in the Ascore paper
-		double pr = ( ((double)optimalPeakDepth) / MZ_WIN ) * g_MZ_ERR; // Oct 24, 2012 our pr value is based upon Alexey's old python code
-		//double pr = ( ((double)optimalPeakDepth) / MZ_WIN ); // used in original Ascore paper
-		//double pr = getPhosphoRS_pr();
-
-
-
+		double pr = getPeakProb( (double)optimalPeakDepth );
 
 		double prob = cum_binomial_prob(N, k, pr);
 		ret = -10.0 * log(prob);
@@ -852,159 +918,56 @@ double AscoreClass::getFinalAscore(int optimalPeakDepth) {
 
 
 
+// Function retains only the site-determining ions for this peptide permutation
+void AscoreClass::recordSiteDetermIons(set<string> &ions) {
 
-
-// Function figures out the site-determining ions for the given phospho-peptide sequence
-int AscoreClass::getSiteDetermIons() {
-	vector<string> B;
-	vector<string> Y;
-	vector<int> M_b, M_y;
-	list<int> phosphoPos;
-	int N = 0;
-	int ret = 0;
-	int ctr = 0;
-	string b_ion_str, y_ion_str, tmp, rev_str;
-	size_t found;
-	string modChars = "sty234567890@#$%&;?~";
-
-	boost::regex ion_regex("^([by].\\d+:\\w+)(\/\+\\d+)?");
-	boost::smatch matches;
-
-	string srchStr = seq; // assign the modPeptide sequence of this AscoreClass instance
-
-	N = (signed)srchStr.length(); // length of sequence
-
-	// initialize vectors to all zeros
-	for(int i = 0; i < N; i++) {
-		M_b.push_back(0);
-		M_y.push_back(0);
-	}
-
-	// Label M_b with the cumulative sum of phospho sites in the peptide along
-	// the b-ion series
-	for(int i = 0; i < N; i++) {
-		char c = srchStr.at(i);
-		found = modChars.find(c);
-		if(found != string::npos) ctr++;
-		M_b.at(i) = ctr;
-	}
-
-
-
-	// Label M_y with the cumulative sum of phospho sites in the peptide along
-	// the y-ion series. We reverse the sequence for the y-ions. It's easier
-	// than figuring out the math in reverse.
-	ctr = 0;
-	for(int i = N-1; i > -1; i--) {
-		char c = srchStr.at(i);
-		found = modChars.find(c);
-		if(found != string::npos) ctr++;
-		M_y.at(i) = ctr;
-	}
-
-
-	/*
-	 * Wherever the M_b and M_y vectors have a number equal to 'numPhosphorylations'
-	 * for this peptide, that is the ion ladder number for a site-determining ion
-	 */
-	// B-ions
-	for(int i = 1; i < N-1; i++) { // we do not include/keep the last ion (which is the whole peptide)
-		if( M_b.at(i) == numPhosphorylations ) {
-			b_ion_str = srchStr.substr(0, (i+1) );
-			tmp = "b^" + int2string((i+1)) + ":" + b_ion_str;
-			B.push_back(tmp);
-		}
-	}
-
-
-	// Y-ions (we have to work from the C-term (right-hand-side) of the string)
-	for(int i = N-1; i > 0; i--) {
-		if(M_y.at(i) == numPhosphorylations) {
-			int j = N - i;
-			y_ion_str = srchStr.substr(i, j);
-			tmp = "y^" + int2string(j) + ":" + y_ion_str;
-			Y.push_back(tmp);
-		}
-	}
-
-
-	/*
-	 * Now that we have the site specific ion strings, we will clean out
-	 * the 'b/y_ion_set' sets and store only these cases
-	 */
-	map<string, double> *tmpIonMap = NULL;
-	set<string> *tmpStrSet = NULL;
-	set<string>::iterator setIter;
-	vector<string>::iterator v;
+	set<string>::iterator sdIter; //site-determining iter
+	map<string, double> keepers;
+	map<string, double>::iterator m;
+	string tmp;
+	int f;
 
 	// b-ions
-	tmpIonMap = new map<string, double>;
-	tmpStrSet = new set<string>;
-	for(v = B.begin(); v != B.end(); v++) {
-		// find this site-determining ion inside of the original b_ion_set
-		// Then record it's various forms (ie: different charge states)
-		for(setIter = b_ion_set.begin(); setIter != b_ion_set.end(); setIter++) {
+	for(m = b_ions.begin(); m != b_ions.end(); m++) {
+		f = m->first.find_first_of("/");
 
-			boost::regex_match(*setIter, matches, ion_regex);
-			tmp.clear();
-			tmp.assign(matches[1].first, matches[1].second);
+		if(f != string::npos) tmp = m->first.substr(0,f);
+		else tmp = m->first;
 
-			if(tmp.compare(*v) == 0) {
-				tmpIonMap->insert(pair<string, double>(*setIter, b_ions[ *setIter ]));
-				tmpStrSet->insert(*setIter);
-			}
-		}
+		if( !containsSTY(tmp) ) continue;
 
+		sdIter = ions.find(tmp);
+		if(sdIter != ions.end()) keepers[ m->first ] = m->second;
 	}
-	b_ion_set.clear();
-	b_ion_set = *tmpStrSet;
-	delete(tmpStrSet);
-	b_ions.clear();
-	b_ions = *tmpIonMap;
-	delete(tmpIonMap);
+
 
 	// y-ions
-	tmpIonMap = new map<string, double>;
-	tmpStrSet = new set<string>;
-	for(v = Y.begin(); v != Y.end(); v++) {
-		// find this site-determining ion inside of the original y_ion_set
-		// Then record it's various forms (ie: different charge states)
-		for(setIter = y_ion_set.begin(); setIter != y_ion_set.end(); setIter++) {
+	for(m = y_ions.begin(); m != y_ions.end(); m++) {
+		f = m->first.find_first_of("/");
 
-			boost::regex_match(*setIter, matches, ion_regex);
-			tmp.clear();
-			tmp.assign(matches[1].first, matches[1].second);
+		if(f != string::npos) tmp = m->first.substr(0,f);
+		else tmp = m->first;
 
-			if(tmp.compare(*v) == 0) {
-				tmpIonMap->insert(pair<string, double>(*setIter, y_ions[ *setIter ]));
-				tmpStrSet->insert(*setIter);
-			}
-		}
+		if( !containsSTY(tmp) ) continue;
+
+		sdIter = ions.find(tmp);
+		if(sdIter != ions.end()) keepers[ m->first ] = m->second;
 	}
-	y_ion_set.clear();
-	y_ion_set = *tmpStrSet;
-	delete(tmpStrSet);
+
+	// keep only the ions in the 'keepers' object
+	b_ions.clear();
 	y_ions.clear();
-	y_ions = *tmpIonMap;
-	delete(tmpIonMap);
 
+	for(m = keepers.begin(); m != keepers.end(); m++) {
+		if(m->first.at(0) == 'b') b_ions[ m->first ] = m->second;
 
-	if(g_DEBUG_MODE) {
-		cerr << "\nSite determining B-ions (if any):\n";
-		for(setIter = b_ion_set.begin(); setIter != b_ion_set.end(); setIter++) {
-			cerr << *setIter << endl;
+		if(m->first.at(0) == 'y') y_ions[ m->first ] = m->second;
+
+		if(g_DEBUG_MODE) {
+			cerr << "|" << seq << "|\t" << m->first << "\t" << m->second << endl;
 		}
-
-		cerr << "\nSite determining Y-ions (if any):\n";
-		for(setIter = y_ion_set.begin(); setIter != y_ion_set.end(); setIter++) {
-			cerr << *setIter << endl;
-		}
-		cerr << endl;
 	}
 
-
-	ret = (signed) y_ion_set.size() + (signed) b_ion_set.size();
-	return ret;
 }
 
 
@@ -1043,5 +1006,25 @@ double AscoreClass::getPhosphoRS_pr() {
 	return ret;
 }
 
+
+
+// Function just returns the probability value to be used in Ascore calculation
+// We are using this function because there are 3 competing methods for how to
+// compute the probability. It's a lot easier to simply change this function
+// than it is to change all instances of the formula throughout the code
+double AscoreClass::getPeakProb(double i) {
+	double ret = 0;
+
+
+	if(i == -1) ret = getPhosphoRS_pr();
+	else {
+
+		//ret = (i / MZ_WIN) * g_MZ_ERR; // this equation is from Alexey's old python code
+
+		ret = i / MZ_WIN;  // used in original Ascore manuscript
+	}
+
+	return ret;
+}
 
 

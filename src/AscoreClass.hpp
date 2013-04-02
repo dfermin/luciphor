@@ -54,16 +54,20 @@ public:
 	void generateIonsMZ(string ion, char ion_type);
 	void generate_NL_ionsMZ(string ion, char ion_type);
 	void recordMZrange();
-	void assignSpectrumMap(map<double, double> src) { local_spectrum = src; }
+	void assignSpectrumMap(map<double, vector<double> > *ptr); // { local_spectrum = src; }
 	void getSpectrumAt_X_depth(int numPeaks, map<double, double> *Mptr);
 	void recordBestSpectrum(int bestPeakDepth);
+	void recordSiteDetermIons(set<string> &ions);
+	void removePrecursorNL();
+	void generateNL_ionsMZ(string ion, char ion_type);
 	map<double, peakStruct> getMatchedSpectrumMap() { return matched_spectrum; }
+	map<double, double> getRawSpectrum() { return local_spectrum; }
 	double getMass();
-	int getSiteDetermIons();
 	int getNumModSTYs(string txt);
-	double getPeptideScore();
+	deque<double> getPeptideScore();
 	double getFinalAscore(int optimalPeakDepth);
 	double getPhosphoRS_pr();
+	double getPeakProb(double i);
 	vector<double> getPeptideScoreVec();
 };
 

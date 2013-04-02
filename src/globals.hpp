@@ -51,6 +51,7 @@ extern bool g_WRITE_TOP_TWO;
 extern bool g_captureChargeStateModel; // in case you can't model a charge state, use the next closest charge states' parameters
 extern bool g_useOnlySiteDetermIons; // when true, only site determining ions will be used in scoring a PSM (Luciphor only option)
 extern bool g_usePPM;
+extern bool g_removePrecursorNL;  // true means we remove MH-H2O and MH-H3PO4 peaks from spectrum
 extern string g_BUILD_TIME;
 
 extern string g_scoringMethod; // used to manage scoring metric
@@ -62,16 +63,26 @@ extern int g_intensityType;
 extern int g_progressCtr;
 extern int g_totalNumPSM;
 extern int g_CHARGE_STATE;
+
 extern int g_MIN_MODEL_NUM; // minimum number of PSMs you need for modeling
 extern map<char, string> modAAmap;
 extern map<char, char> decoyAA;
 extern set<string> g_PSMscoreSet; //set of PSMs the user wants scored
 
+
 // Global constants
 const double TINY_NUM = 1e-10; // represents a tiny number
 const double TINY_DEN = 1.0;
-const double BIG_NUM = 1e10; // represents a tiny number
+const double BIG_NUM = 1e10; // represents a big number
 const double PPM = 1e-6; // parts per million
+const int g_MIN_NUM_PSM_FOR_FLR = 50; // min. number of PSMs needed for FLR calculation
+
+const double H = 1.00728;
+const double H2O = 18.00947;
+const double NH3 = 17.026549;
+const double H3PO4 = 79.96633 + H2O;
+const double OH = 17.00219;
+const double e = 0.00054858026;
 
 
 /*
@@ -84,9 +95,12 @@ void addAAmass(string AA, double mass, char isVar);
 void printProgress(string txt, int ctr, int N);
 void parse_alternative_scoring(string *scoringStr, string *modelingStr);
 void parsePSMfile(string srcFile);
+void getSiteDeterminingIons(string pep1, string pep2, set<string> &ions1, set<string> &ions2);
+
 
 double round_dbl(double r, int places);
 double str2dbl(string ch);
+double getIonMass(string seq, char ionType);
 
 vector<string> split_string(string line);
 
@@ -97,7 +111,7 @@ string dbl2string(double d);
 string getTimeStamp();
 string genRandDecoyPeptide(string srcSeq, int numSites);
 string getExecutionParameters();
-string repModAAchar(string *srcPtr);
+string repModAAchar(string *srcPtr, double nterm_mass);
 string reverseString(string input);
 
 double Factorial(double x); // used to compute factorials (n!)

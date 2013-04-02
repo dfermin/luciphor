@@ -33,6 +33,7 @@ private:
 	int numPhosphoSites;
 	int numSupportingSpectra; // nss = how many spectra match this phospho-peptide
 	double mass; // calculated neutral mass of peptide
+	double precursor_mass; // neutral precursor mass of peptide
 	double numPotentialSites;
 	double numPermutations;
 	double numDecoyPermutations;
@@ -40,6 +41,7 @@ private:
 	double delta_top2peaks; // holds the difference between the top 2 most intense peak of spectrum
 	double min_intensity;
 	double max_intensity; // maximum intensity observed from RAW peaks
+	double max_intensity_orig; // maximum peak intensity observed in RAW *BEFORE* removing neutral loss peaks
 	double median_intensity; // the median peak intensity for the spectrum
 	double meanI;
 	double varI;
@@ -59,7 +61,6 @@ private:
 	bool use_for_model;
 	bool is_unambiguous;
 	bool is_randomized_seq;
-
 
 	ascoreFinalStruct afs; // holds result for Ascore run
 
@@ -94,14 +95,13 @@ public:
 
 	void recordSpectrum(SpecStruct spec);
 	void normalizeSpectrum();
-	void identifyNeutralLossPeak();
 	void identifyNoisyPeaks();
 	void writeSpectrumToDisk();
 	void generatePermutations();
 	void scorePermutations();
 	void classifyPeaks();
 	void randomizeSeq();
-	void deisotopeSpectrum();
+	void getPrecursorMass();
 
 	void calcUnmatchedPeakParams();
 	void calcScore();
