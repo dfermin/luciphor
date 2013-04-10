@@ -173,7 +173,7 @@ void PSMClass::identify_STY_sites() {
 string PSMClass::getSpectrumFileName() {
 
 	boost::smatch matches; // used to capture REGEX matches, element[0] is the whole string
-	boost::regex spectrum_regex("(.*\/)?(.+)\\.\\d+\\.\\d+\\.\\d+$");
+	boost::regex spectrum_regex("(.*\\/)?(.+)\\.\\d+\\.\\d+\\.\\d+$");
 	string ret;
 
 	if( boost::regex_match(specId, matches, spectrum_regex) ) {
