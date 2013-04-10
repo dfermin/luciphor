@@ -55,6 +55,7 @@ private:
 public:
 	void parsePepXMLfile();
 	void readInSpectra();
+	void parseMGF();
 	void quantileNormalize();
 	void medianNormalize();
 	void scoreSpectra();

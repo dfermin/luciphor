@@ -96,7 +96,7 @@ void print_usage() {
 		 << "\nOptional parameters\n"
 		 << "   -p <0.0-1.0>              min. Peptide probability threshold (default is " << g_prob_threshold << ")\n"
 		 << "   -m <0.0-1.0>              min. Peptide probability to use for parameter estimations (default is " << g_model_prob << ")\n"
-		 << "   -e <mzML, mzXML, etc..>   File extension used for reading spectral data files (default is mzXML)\n"
+		 << "   -e <mzML, mzXML, etc...>  File extension used for reading spectral data files (default is mzXML)\n"
 		 << "   -f                        \"The Full Monty\": Report scores for all spectra not just representative ones\n"
 		 << "   -A / --Ascore             Run our version of Ascore algorithm instead of Luciphor (m/z window fixed at 0.6 for this)\n"
 		 << "   -c / --capture            Capture PSM's you can't model, use the model parameters for the next closest charge state\n"

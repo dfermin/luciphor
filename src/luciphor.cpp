@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
 
     g_BUILD_TIME = yr + mon + day + "-" + build_time;
 
-	cerr << "\nLuciphor BUILD: " << g_BUILD_TIME << endl;
+	cerr << "\nLuciphor v1.0   BUILD: " << g_BUILD_TIME << endl;
 
 
 
