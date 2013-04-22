@@ -379,13 +379,15 @@ void PepXMLClass::parseMGF() {
 			line.clear();
 			getline(mgf, line);
 
-			if(line.compare("END IONS") == 0) { // end of a spectrum record
-				spectrumMapPtr->insert(pair<string, SpecStruct>(specId, *curSpectrum));
+			if(line.substr(0,7) == "END IONS") { // end of a spectrum record
+				if( !specId.empty() )
+					spectrumMapPtr->insert(pair<string, SpecStruct>(specId, *curSpectrum));
+
 				delete(curSpectrum);
 				curSpectrum = NULL;
 			}
 
-			else if(line.compare("BEGIN IONS") == 0) { // beginning of a new spectrum
+			else if(line.substr(0,10) == "BEGIN IONS") { // beginning of a new spectrum
 				curSpectrum = new SpecStruct;
 				mz = 0;
 				intensity = 0;
@@ -398,9 +400,11 @@ void PepXMLClass::parseMGF() {
 
 			else if( isdigit(line[0]) ) { // you've hit a peak entry
 				vPtr = new vector<string>(2);
-				boost::split(*vPtr, line, boost::is_any_of("\t "));
+				*vPtr = split_string(line);
+
 				mz = str2dbl( vPtr->at(0) );
 				intensity = str2dbl( vPtr->at(1) );
+
 				curSpectrum->mz.push_back(mz);
 				curSpectrum->intensity.push_back(intensity);
 				delete(vPtr);
@@ -408,6 +412,13 @@ void PepXMLClass::parseMGF() {
 		}
 		// close current MGF file
 		mgf.close();
+
+		// record the last spectrum
+		if(curSpectrum != NULL) {
+			spectrumMapPtr->insert(pair<string, SpecStruct>(specId, *curSpectrum));
+			delete(curSpectrum);
+			curSpectrum = NULL;
+		}
 
 
 		// Iterate over the specId values for the current file. 'm' is an iterator
