@@ -54,7 +54,7 @@ extern bool g_usePPM;
 extern bool g_removePrecursorNL;  // true means we remove MH-H2O and MH-H3PO4 peaks from spectrum
 extern string g_BUILD_TIME;
 
-extern string g_scoringMethod; // used to manage scoring metric
+extern int g_scoringMethod; // used to manage scoring metric
 extern double g_dist_adj;
 extern double g_NUM_PERMS_LIMIT;
 extern double MIN_MZ;   // lowest m/z value we'll consider

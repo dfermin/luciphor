@@ -26,7 +26,6 @@
 using namespace std;
 
 
-string g_scoringMethod = "default";
 string g_srcXMLfile;
 string g_ext = "mzXML";
 string g_srcDir;
@@ -61,6 +60,7 @@ double g_NUM_PERMS_LIMIT = pow(2.0, 14); // maximum number of permutations to co
 set<string> g_PSMscoreSet;
 bool g_scoreSelect = false;
 
+int g_scoringMethod = 0;
 int g_NUM_THREADS = 1;
 int g_intensityType = 2;
 int g_CHARGE_STATE = 0;
@@ -88,14 +88,22 @@ static const struct option longOpts[] = {
 
 
 void print_usage() {
-	cerr << "\nUSAGE: luciphor -i -d -w [ -e -f -m -p -o (-M -P) -t -b -T -A -c -n -N -Z -k]\n"
+	cerr << "\nUSAGE: luciphor -i -d -w [ -e -f (-x -m -p) -o -t -b -T -A -c -n -N -Z -k]\n"
 		 << "   -i <interact.pep.xml>     pepXML file to analyze\n"
 		 << "   -d <path>                 the path to the spectral data files\n"
 		 << "   -w <# greater than 0>     The MS2 fragment ion tolerance in Daltons (default is " << g_MZ_ERR << " Da.)\n"
 
 		 << "\nOptional parameters\n"
-		 << "   -p <0.0-1.0>              min. Peptide probability threshold (default is " << g_prob_threshold << ")\n"
-		 << "   -m <0.0-1.0>              min. Peptide probability to use for parameter estimations (default is " << g_model_prob << ")\n"
+		 << "   -x <0,1,2,3>              Peptide selection method.\n"
+		 << "                             0 = Peptide Prophet probability (default)\n"
+		 << "                             1 = Sequest/Comet Xcorr\n"
+		 << "                             2 = -log(X!Tandem Evalue)\n"
+		 << "                             3 = Mascot IonScore\n\n"
+		 << "   -p <float>                Minimum score a PSM needs in order to be considered for scoring\n"
+		 << "                             Default is " << g_prob_threshold << " for -x 0\n"
+		 << "   -m <float>                Minimum score a PSM needs in order to be used for model parameter estimation\n"
+		 << "                             Default is " << g_model_prob << " for -x 0\n\n"
+
 		 << "   -e <mzML, mzXML, etc...>  File extension used for reading spectral data files (default is mzXML)\n"
 		 << "   -f                        \"The Full Monty\": Report scores for all spectra not just representative ones\n"
 		 << "   -A / --Ascore             Run our version of Ascore algorithm instead of Luciphor (m/z window fixed at 0.6 for this)\n"
@@ -120,19 +128,19 @@ void print_usage() {
 		 << "                             2 = use neutral loss peaks ONLY for model parameter acquisition\n"
 		 << "                             3 = use them only in final scoring of phospho-peptides (ie: not for model parameter acquisition)\n\n"
 
-		 << "   -P <score_method>         Use this option if you want to pick spectra based upon\n"
-		 << "                             a search engine score instead of PeptideProphet probabilities\n"
-		 << "                             *** You MUST use -M _WITH_ -P ***\n"
-		 << "                             -P sequest=<Xcorr>   Use the Sequest XCorr values\n"
-		 << "                             -P xtandem=<-log(Evalue)>  Use negative log of X-tandem expect score: -log(Evalue)\n"
-		 << "                             -P mascot=<ionScore> Use the Mascot ion-score\n\n"
-
-		 << "   -M <score_method>         Use this option if you want to pick spectra for modeling based upon \n"
-		 << "                             a search engine score instead of probabilities.\n"
-		 << "                             *** You MUST use -P _WITH_ -M ***\n"
-		 << "                             -M sequest=<Xcorr>   Use the Sequest XCorr values\n"
-		 << "                             -M xtandem=<-log(Evalue)>  Use negative log of X-tandem expect score: -log(Evalue)\n"
-		 << "                             -M mascot=<ionScore> Use the Mascot ion-score\n\n"
+//		 << "   -P <score_method>         Use this option if you want to pick spectra based upon\n"
+//		 << "                             a search engine score instead of PeptideProphet probabilities\n"
+//		 << "                             *** You MUST use -M _WITH_ -P ***\n"
+//		 << "                             -P sequest=<Xcorr>   Use the Sequest XCorr values\n"
+//		 << "                             -P xtandem=<-log(Evalue)>  Use negative log of X-tandem expect score: -log(Evalue)\n"
+//		 << "                             -P mascot=<ionScore> Use the Mascot ion-score\n\n"
+//
+//		 << "   -M <score_method>         Use this option if you want to pick spectra for modeling based upon \n"
+//		 << "                             a search engine score instead of probabilities.\n"
+//		 << "                             *** You MUST use -P _WITH_ -M ***\n"
+//		 << "                             -M sequest=<Xcorr>   Use the Sequest XCorr values\n"
+//		 << "                             -M xtandem=<-log(Evalue)>  Use negative log of X-tandem expect score: -log(Evalue)\n"
+//		 << "                             -M mascot=<ionScore> Use the Mascot ion-score\n\n"
 
 		 << "   --Sl <file>               Score and report only results for the PSMs in this file, one PSM ID per line\n"
 		 << "   --noDecoys                Do *NOT* estimate False Localization Rate (FLR) using decoy phosphorylation sites\n"
@@ -162,16 +170,16 @@ void parse_command_line_args(int argc, char *argv[]) {
 	x.clear();
 
 
-	string *scoringStr = NULL; // for -P option
-	string *modelingStr = NULL; // for -M option
-	string *decoyStr = NULL; // for decoy amino acid
+//	string *scoringStr = NULL; // for -P option
+//	string *modelingStr = NULL; // for -M option
+//	string *decoyStr = NULL; // for decoy amino acid
 	string PSMfile;
 
 	int nn = 0;
 	int c;
 
 	int longIndex;
-	while( (c = getopt_long(argc, argv, "m:p:i:w:d:e:T:t:P:M:o:n:Z:k:fcAbN", longOpts, &longIndex)) != -1 ) {
+	while( (c = getopt_long(argc, argv, "m:p:x:i:w:d:e:T:t:o:n:Z:k:fcAbN", longOpts, &longIndex)) != -1 ) {
 		switch(c) {
 
 		case 'N':
@@ -218,6 +226,9 @@ void parse_command_line_args(int argc, char *argv[]) {
 		case 'p':
 			g_prob_threshold = atof(optarg);
 			break;
+		case 'x':
+			g_scoringMethod = atoi(optarg);
+			break;
 		case 'o':
 			g_outputName = optarg;
 			g_userDefinedOutput = true;
@@ -237,12 +248,12 @@ void parse_command_line_args(int argc, char *argv[]) {
 		case 'e':
 			g_ext = optarg;
 			break;
-		case 'M':
-			modelingStr = new string( optarg );
-			break;
-		case 'P':
-			scoringStr = new string( optarg );
-			break;
+//		case 'M':
+//			modelingStr = new string( optarg );
+//			break;
+//		case 'P':
+//			scoringStr = new string( optarg );
+//			break;
 
 		case 0: /* for long options */
 			for(int k = 0; k < 8; k++) {
@@ -331,19 +342,19 @@ void parse_command_line_args(int argc, char *argv[]) {
 
 
 	// this handles alternative scoring function error checking
-	if( (scoringStr != NULL) && (modelingStr == NULL) ) {
-		cerr << "\nERROR: -M is required with -P option\n\n";
-		print_usage();
-		exit(0);
-	}
-	else if( (scoringStr == NULL) && (modelingStr != NULL) ) {
-		cerr << "\nERROR: -P is required with -M option\n\n";
-		print_usage();
-		exit(0);
-	}
-	else if( (scoringStr != NULL) && (modelingStr != NULL) ) {
-		parse_alternative_scoring(scoringStr, modelingStr);
-	}
+//	if( (scoringStr != NULL) && (modelingStr == NULL) ) {
+//		cerr << "\nERROR: -M is required with -P option\n\n";
+//		print_usage();
+//		exit(0);
+//	}
+//	else if( (scoringStr == NULL) && (modelingStr != NULL) ) {
+//		cerr << "\nERROR: -P is required with -M option\n\n";
+//		print_usage();
+//		exit(0);
+//	}
+//	else if( (scoringStr != NULL) && (modelingStr != NULL) ) {
+//		parse_alternative_scoring(scoringStr, modelingStr);
+//	}
 
 
 	if(g_NUM_THREADS > (signed) boost::thread::hardware_concurrency() ) {
@@ -385,8 +396,14 @@ void parse_command_line_args(int argc, char *argv[]) {
 	 ***********************/
 	cerr << "\n==============================================================\n"
 	     << "Run parameters:\n"
-		 << "Data type: " << g_scoringMethod << endl
-		 << "Modeling threshold >= " << g_model_prob << endl
+		 << "Data type: ";
+
+	if(g_scoringMethod == 0) cerr << "Peptide Prophet" << endl;
+	if(g_scoringMethod == 1) cerr << "Sequest/Comet Xcorr" << endl;
+	if(g_scoringMethod == 2) cerr << "-log(X!Tandem Evalue)" << endl;
+	if(g_scoringMethod == 3) cerr << "Mascot IonScore" << endl;
+
+	cerr << "Modeling threshold >= " << g_model_prob << endl
 		 << "Scoring threshold  >= " << g_prob_threshold << endl
 		 << "Permutation limit: " << g_NUM_PERMS_LIMIT << endl
 		 << "Spectral format:   " << g_ext << endl
@@ -471,9 +488,14 @@ void parse_command_line_args(int argc, char *argv[]) {
 string getExecutionParameters() {
 	string ret;
 
-	ret += "Run Date:\t" + getTimeStamp() + "\n" 
-		+ "Scoring method:\t" + g_scoringMethod + "\n"
-		+ "Modeling threshold:\t" + dbl2string(g_model_prob) + "\n"
+	ret = "Run Date:\t" + getTimeStamp() + "\n";
+
+	if(g_scoringMethod == 0) ret +="Scoring method:\tPeptide Prophet\n";
+	if(g_scoringMethod == 1) ret +="Scoring method:\tSequest/Comet Xcorr\n";
+	if(g_scoringMethod == 2) ret +="Scoring method:\t-log(X!Tandem Evalue)\n";
+	if(g_scoringMethod == 3) ret +="Scoring method:\tMascot IonScore\n";
+
+	ret += "Modeling threshold:\t" + dbl2string(g_model_prob) + "\n"
 		+ "Scoring threshold:\t" + dbl2string(g_prob_threshold) + "\n"
 		+ "Permutation limit:\t" + dbl2string(g_NUM_PERMS_LIMIT) + "\n"
 		+ "Number of threads:\t" + int2string(g_NUM_THREADS) + "\n";
@@ -545,62 +567,62 @@ bool allValidAAs(string *srcPtr) {
 
 // function parses the alternative scoring string data and records the
 // scoring info into global variables
-void parse_alternative_scoring(string *scoringStr, string *modelingStr) {
-
-	int iS = 0, iM = 0;
-	string xCorr_str, deltaCn_str;
-
-
-	iS = scoringStr->find('=');
-	iM = scoringStr->find('=');
-
-	if(iS == (signed)string::npos){
-		cerr << "\nERROR -P option is incorrectly formatted\n\n";
-		print_usage();
-		exit(0);
-	}
-
-	if(iM == (signed)string::npos){
-		cerr << "\nERROR -M option is incorrectly formatted\n\n";
-		print_usage();
-		exit(0);
-	}
-
-	string s = scoringStr->substr(0, iS);
-	string m = modelingStr->substr(0, iM);
-
-	if(s.compare(m) != 0) {
-		cerr << "\nERROR -P and -M must be the same scoring method\n\n";
-		print_usage();
-		exit(0);
-	}
-
-	string method = scoringStr->substr(0, iS);
-
-	string cutoffS, cutoffM;
-	cutoffS = scoringStr->substr(iS+1);
-	cutoffM = modelingStr->substr(iM+1);
-
-	g_scoringMethod = method;
-
-	// X!Tandem expect scores are read in as -log(expect)
-	// this means all score comparisons are in the >= category like Sequest/Mascot/Probabilities
-	if(g_scoringMethod.compare("xtandem") == 0) {
-		g_prob_threshold = str2dbl(cutoffS);
-		g_model_prob = str2dbl(cutoffM);
-	}
-
-	if(g_scoringMethod.compare("sequest") == 0) {
-		g_prob_threshold = str2dbl(cutoffS);
-		g_model_prob = str2dbl(cutoffM);
-	}
-
-	if(g_scoringMethod.compare("mascot") == 0) {
-		g_prob_threshold = str2dbl(cutoffS);
-		g_model_prob = str2dbl(cutoffM);
-	}
-
-}
+//void parse_alternative_scoring(string *scoringStr, string *modelingStr) {
+//
+//	int iS = 0, iM = 0;
+//	string xCorr_str, deltaCn_str;
+//
+//
+//	iS = scoringStr->find('=');
+//	iM = scoringStr->find('=');
+//
+//	if(iS == (signed)string::npos){
+//		cerr << "\nERROR -P option is incorrectly formatted\n\n";
+//		print_usage();
+//		exit(0);
+//	}
+//
+//	if(iM == (signed)string::npos){
+//		cerr << "\nERROR -M option is incorrectly formatted\n\n";
+//		print_usage();
+//		exit(0);
+//	}
+//
+//	string s = scoringStr->substr(0, iS);
+//	string m = modelingStr->substr(0, iM);
+//
+//	if(s.compare(m) != 0) {
+//		cerr << "\nERROR -P and -M must be the same scoring method\n\n";
+//		print_usage();
+//		exit(0);
+//	}
+//
+//	string method = scoringStr->substr(0, iS);
+//
+//	string cutoffS, cutoffM;
+//	cutoffS = scoringStr->substr(iS+1);
+//	cutoffM = modelingStr->substr(iM+1);
+//
+//	g_scoringMethod = method;
+//
+//	// X!Tandem expect scores are read in as -log(expect)
+//	// this means all score comparisons are in the >= category like Sequest/Mascot/Probabilities
+//	if(g_scoringMethod.compare("xtandem") == 0) {
+//		g_prob_threshold = str2dbl(cutoffS);
+//		g_model_prob = str2dbl(cutoffM);
+//	}
+//
+//	if(g_scoringMethod.compare("sequest") == 0) {
+//		g_prob_threshold = str2dbl(cutoffS);
+//		g_model_prob = str2dbl(cutoffM);
+//	}
+//
+//	if(g_scoringMethod.compare("mascot") == 0) {
+//		g_prob_threshold = str2dbl(cutoffS);
+//		g_model_prob = str2dbl(cutoffM);
+//	}
+//
+//}
 
 
 

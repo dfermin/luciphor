@@ -88,9 +88,9 @@ void PepXMLClass::parsePepXMLfile() {
 	boost::regex mascot_ionscore_regex("^.*<search_score name=\"ionscore\" value=\"([^\"]+)\".*");
 
 	scoring_regex_ptr = &peptideprophet_result_regex; // the default
-	if(g_scoringMethod.compare("sequest") == 0) scoring_regex_ptr = &sequest_xcorr_regex;
-	if(g_scoringMethod.compare("xtandem") == 0) scoring_regex_ptr = &xtandem_expect_regex;
-	if(g_scoringMethod.compare("mascot")  == 0) scoring_regex_ptr = &mascot_ionscore_regex;
+	if(g_scoringMethod == 1) scoring_regex_ptr = &sequest_xcorr_regex;
+	if(g_scoringMethod == 2) scoring_regex_ptr = &xtandem_expect_regex;
+	if(g_scoringMethod == 3) scoring_regex_ptr = &mascot_ionscore_regex;
 
 
 	ifstream in;
@@ -182,7 +182,7 @@ void PepXMLClass::parsePepXMLfile() {
 			tmp.assign(matches[1].first, matches[2].second);
 
 			double d = strtod(tmp.c_str(), NULL);
-			if(g_scoringMethod.compare("xtandem") == 0) {
+			if(g_scoringMethod == 2) {
 				if(d < TINY_NUM) d = TINY_NUM; // prevents errors when taking long
 				mds->iniProb = -1.0 * log(d);
 			}
@@ -515,10 +515,10 @@ void PepXMLClass::prunePSMdeq() {
 	}
 
 	// this just helps report the more clearly to the user the cause of the problem
-	if(g_scoringMethod.compare("xtandem") == 0) sm = "-log(E-value)";
-	else if(g_scoringMethod.compare("sequest") == 0) sm = "Sequest XCorr";
-	else if(g_scoringMethod.compare("mascot") == 0) sm = "Mascot Ion Score";
-	else if(g_scoringMethod.compare("default") == 0) sm = "Probability";
+	if(g_scoringMethod == 0) sm = "Probability";
+	if(g_scoringMethod == 1) sm = "Sequest XCorr";
+	if(g_scoringMethod == 2) sm = "-log(E-value)";
+	if(g_scoringMethod == 3) sm = "Mascot Ion Score";
 
 	for(curZ = zMap.begin(); curZ != zMap.end(); curZ++) {
 		// all PSMs for this charge state must be removed
@@ -1104,8 +1104,11 @@ void PepXMLClass::writeLuciphorResults() {
 			 << "predictedPep_1\t"
 			 << "predictedPep_2\t";
 
-		if(g_scoringMethod.compare("default") == 0) outf << "pepProphetProb\t";
-		else outf << g_scoringMethod << "\t";
+		if(g_scoringMethod == 0) outf << "pepProphetProb\t";
+		if(g_scoringMethod == 1) outf << "Xcorr\t";
+		if(g_scoringMethod == 2) outf << "negLogEvalue\t";
+		if(g_scoringMethod == 3) outf << "IonScore\t";
+
 
 		outf << "numRPS\t" // number of reported phospho sites
 			 << "numPPS\t" // number of potential phospho sites
@@ -1132,8 +1135,10 @@ void PepXMLClass::writeLuciphorResults() {
 			 << "predictedPep_1\t"
 			 << "predictedPep_2\t";
 
-		if(g_scoringMethod.compare("default") == 0) outf << "pepProphetProb\t";
-		else outf << g_scoringMethod << "\t";
+		if(g_scoringMethod == 0) outf << "pepProphetProb\t";
+		if(g_scoringMethod == 1) outf << "Xcorr\t";
+		if(g_scoringMethod == 2) outf << "negLogEvalue\t";
+		if(g_scoringMethod == 3) outf << "IonScore\t";
 
 		outf << "nss\t"
 			 << "numRPS\t" // number of reported phospho sites
@@ -1340,8 +1345,10 @@ void PepXMLClass::process_with_Ascore() {
 		 << "AscoreSeq1\t"
 		 << "AscoreSeq2\t";
 
-	if(g_scoringMethod.compare("default") == 0) outf << "pepProphetProb\t";
-	else outf << g_scoringMethod << "\t";
+	if(g_scoringMethod == 0) outf << "pepProphetProb\t";
+	if(g_scoringMethod == 1) outf << "Xcorr\t";
+	if(g_scoringMethod == 2) outf << "negLogEvalue\t";
+	if(g_scoringMethod == 3) outf << "IonScore\t";
 
 	outf << "numRPS\t" // number of reported phopsho sites
 		 << "numPPS\t" // number of potential phospho site (ie: # STY characters)
