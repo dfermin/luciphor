@@ -50,6 +50,7 @@ bool g_WRITE_TOP_TWO = false;
 bool g_useOnlySiteDetermIons = false;
 bool g_usePPM = false;
 bool g_removePrecursorNL = true;
+bool g_SITE_LEVEL_SCORING = false;
 
 double MIN_MZ = 100.0; // lowest m/z value we'll consider
 double g_MZ_ERR = 0.5;
@@ -88,7 +89,7 @@ static const struct option longOpts[] = {
 
 
 void print_usage() {
-	cerr << "\nUSAGE: luciphor -i -d -w [ -e -f (-x -m -p) -o -t -b -T -A -c -n -N -Z -k]\n"
+	cerr << "\nUSAGE: luciphor -i -d -w [ -e -f (-x -m -p) -o -t -b -T -A -c -S -n -N -Z -k]\n"
 		 << "   -i <interact.pep.xml>     pepXML file to analyze\n"
 		 << "   -d <path>                 the path to the spectral data files\n"
 		 << "   -w <# greater than 0>     The MS2 fragment ion tolerance in Daltons (default is " << g_MZ_ERR << " Da.)\n"
@@ -113,6 +114,7 @@ void print_usage() {
 		 << "   -T <1-N>                  Number of threads to use (default is 1)\n"
 		 << "   --single                  Represent modified residues by a single character (usually the AA letter in lower case)\n"
 		 << "   --hcd                     Tells me that the input data is HCD and to adjust my parameters accordingly\n"
+		 << "   -S                        Perform site-level scoring. Obtain a score for every phospho-site in each peptide sequence\n"
 		 << "   -N                        Do not remove precursor neutral loss peaks from spectrum before scoring\n"
 		 << "   -t <1,2>                  Tells me to write the spectra to disk with each assigned peak annotated\n"
 		 << "                             1 = raw spectrum\n"
@@ -169,19 +171,19 @@ void parse_command_line_args(int argc, char *argv[]) {
 	}
 	x.clear();
 
-
-//	string *scoringStr = NULL; // for -P option
-//	string *modelingStr = NULL; // for -M option
-//	string *decoyStr = NULL; // for decoy amino acid
 	string PSMfile;
 
 	int nn = 0;
 	int c;
 
 	int longIndex;
-	while( (c = getopt_long(argc, argv, "m:p:x:i:w:d:e:T:t:o:n:Z:k:fcAbN", longOpts, &longIndex)) != -1 ) {
+	while( (c = getopt_long(argc, argv, "m:p:x:i:w:d:e:T:t:o:n:Z:k:fcAbNS", longOpts, &longIndex)) != -1 ) {
 		switch(c) {
 
+		case 'S':
+			g_SITE_LEVEL_SCORING = true;
+			g_randDecoyAA = false;
+			break;
 		case 'N':
 			g_removePrecursorNL = false;
 			break;
@@ -325,6 +327,14 @@ void parse_command_line_args(int argc, char *argv[]) {
 		g_randDecoyAA = false;
 	}
 
+
+	// choosing site-level results will not produce spectra
+	if( g_SITE_LEVEL_SCORING ) {
+		g_writeDTA = false;
+		g_WRITE_TOP_TWO = false;
+		g_FULL_MONTY = false;
+	}
+
 	if( g_WRITE_TOP_TWO && !g_writeDTA) {
 		cerr << "\nERROR: -b requires the -t option\n\n";
 		exit(0);
@@ -426,11 +436,16 @@ void parse_command_line_args(int argc, char *argv[]) {
 
 	cerr << "Output format: ";
 	if(g_FULL_MONTY) cerr << "Full Monty\n";
-	else cerr << "Default\n";
+	if(g_SITE_LEVEL_SCORING) cerr << "Site level\n";
+	if(!g_FULL_MONTY && !g_SITE_LEVEL_SCORING) cerr << "Default\n";
 
 	cerr << "Output to: " << g_outputName << endl;
 
 	cerr << "\nOther options used (if any):\n";
+
+	if(g_SITE_LEVEL_SCORING) {
+		cerr << "\tPerforming site-level score calculations. No FLR estimation.\n";
+	}
 
 	if(g_useOnlySiteDetermIons) {
 		cerr << "\tOny site determining ions will be used for scoring\n";
@@ -561,69 +576,6 @@ bool allValidAAs(string *srcPtr) {
 	if(badCount > 0) ret = false;
 	return ret;
 }
-
-
-
-
-// function parses the alternative scoring string data and records the
-// scoring info into global variables
-//void parse_alternative_scoring(string *scoringStr, string *modelingStr) {
-//
-//	int iS = 0, iM = 0;
-//	string xCorr_str, deltaCn_str;
-//
-//
-//	iS = scoringStr->find('=');
-//	iM = scoringStr->find('=');
-//
-//	if(iS == (signed)string::npos){
-//		cerr << "\nERROR -P option is incorrectly formatted\n\n";
-//		print_usage();
-//		exit(0);
-//	}
-//
-//	if(iM == (signed)string::npos){
-//		cerr << "\nERROR -M option is incorrectly formatted\n\n";
-//		print_usage();
-//		exit(0);
-//	}
-//
-//	string s = scoringStr->substr(0, iS);
-//	string m = modelingStr->substr(0, iM);
-//
-//	if(s.compare(m) != 0) {
-//		cerr << "\nERROR -P and -M must be the same scoring method\n\n";
-//		print_usage();
-//		exit(0);
-//	}
-//
-//	string method = scoringStr->substr(0, iS);
-//
-//	string cutoffS, cutoffM;
-//	cutoffS = scoringStr->substr(iS+1);
-//	cutoffM = modelingStr->substr(iM+1);
-//
-//	g_scoringMethod = method;
-//
-//	// X!Tandem expect scores are read in as -log(expect)
-//	// this means all score comparisons are in the >= category like Sequest/Mascot/Probabilities
-//	if(g_scoringMethod.compare("xtandem") == 0) {
-//		g_prob_threshold = str2dbl(cutoffS);
-//		g_model_prob = str2dbl(cutoffM);
-//	}
-//
-//	if(g_scoringMethod.compare("sequest") == 0) {
-//		g_prob_threshold = str2dbl(cutoffS);
-//		g_model_prob = str2dbl(cutoffM);
-//	}
-//
-//	if(g_scoringMethod.compare("mascot") == 0) {
-//		g_prob_threshold = str2dbl(cutoffS);
-//		g_model_prob = str2dbl(cutoffM);
-//	}
-//
-//}
-
 
 
 

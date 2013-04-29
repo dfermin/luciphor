@@ -38,7 +38,6 @@ int main(int argc, char *argv[]) {
 	cerr << "\nLuciphor v1.0   BUILD: " << g_BUILD_TIME << endl;
 
 
-
 	// now the program starts
 	parse_command_line_args(argc, argv);
 	initialize_AA_masses();

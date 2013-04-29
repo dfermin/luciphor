@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <map>
 #include <deque>
+//#include "PepClass.hpp"
 #include "FLRClass.hpp"
 #include "PepXMLClass.hpp"
 #include "PSMClass.hpp"
@@ -124,7 +125,7 @@ void PepXMLClass::parsePepXMLfile() {
 
 
 		//spectrum_query line
-		if( boost::regex_match(line, matches, spectrum_query_regex)) {
+		else if( boost::regex_match(line, matches, spectrum_query_regex)) {
 			score = 0; // prep for next iteration
 
 			mds = new matchDataStruct();
@@ -143,7 +144,7 @@ void PepXMLClass::parsePepXMLfile() {
 
 
 		//search_hit line
-		if( boost::regex_match(line, matches, search_hit_regex) ) {
+		else if( boost::regex_match(line, matches, search_hit_regex) ) {
 			mds->peptide.assign(matches[1].first, matches[1].second);
 
 			tmp.assign(matches[2].first, matches[2].second);
@@ -154,7 +155,7 @@ void PepXMLClass::parsePepXMLfile() {
 		}
 
 		//mod_aminoacid_mass line
-		if( boost::regex_match(line, matches, modification_mass_regex)) {
+		else if( boost::regex_match(line, matches, modification_mass_regex)) {
 			tmp.assign(matches[1].first, matches[1].second);
 			modPos = atoi(tmp.c_str()) - 1; // zero-bases indexing
 			tmp.clear();
@@ -167,7 +168,7 @@ void PepXMLClass::parsePepXMLfile() {
 			score++;
 		}
 
-		if( boost::regex_match(line, matches, nterm_mod_regex)) {
+		else if( boost::regex_match(line, matches, nterm_mod_regex)) {
 			tmp.assign(matches[1].first, matches[1].second);
 			mass = strtod(tmp.c_str(), NULL);
 			tmp.clear();
@@ -178,7 +179,7 @@ void PepXMLClass::parsePepXMLfile() {
 
 		// whatever the PSM selection criterion is, we will store it in
 		// the iniProb variable of the PSMClass
-		if( boost::regex_match(line, matches, *scoring_regex_ptr) ) {
+		else if( boost::regex_match(line, matches, *scoring_regex_ptr) ) {
 			tmp.assign(matches[1].first, matches[2].second);
 
 			double d = strtod(tmp.c_str(), NULL);
@@ -193,7 +194,7 @@ void PepXMLClass::parsePepXMLfile() {
 
 
 		//end of record, decide if you are going to keep it
-		if( boost::regex_match(line, end_spectrum_query) ) {
+		else if( boost::regex_match(line, end_spectrum_query) ) {
 
 			if(score >= 4) {
 				// if we are limiting charge states, this line of code will exclude all PSMs
@@ -213,6 +214,8 @@ void PepXMLClass::parsePepXMLfile() {
 					// we'll use this spectrum for estimating the model parameters
 					if(curPSM->useForModeling()) numPSMs_forModeling++;
 
+//					PepClass *pc = new PepClass(mds);
+//					delete(pc); pc = NULL;
 				}
 			}
 
@@ -828,22 +831,6 @@ void PepXMLClass::acquireModelParameters() {
 					break; // exit the loop for this missed charge state.
 				}
 			}
-
-
-	//		curChargeState = *s_iter - 1;
-	//		m = modelParametersMap.find( curChargeState );
-	//		if(m != modelParametersMap.end()) {
-	//
-	//			curParams = new modelParamStruct();
-	//			*curParams = m->second;
-	//
-	//			for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-	//				if(curPSM->getCharge() != *s_iter) continue;
-	//				curPSM->setParamStruct(curParams);
-	//			}
-	//			delete(curParams); curParams = NULL;
-	//			break; // exit for loop charge states have been filled.
-	//		}
 		}
 
 	}
@@ -1083,7 +1070,7 @@ void PepXMLClass::writeLuciphorResults() {
 	deque<PSMClass>::iterator curPSM;
 
 	// consolidate spectra that match to the same phospho peptide sequence
-	if( !g_FULL_MONTY ) consolidatePSMs();
+	if( !g_FULL_MONTY && !g_SITE_LEVEL_SCORING ) consolidatePSMs();
 
 	cerr << "Writing results to '" << g_outputName << "'\n";
 
@@ -1128,6 +1115,20 @@ void PepXMLClass::writeLuciphorResults() {
 			 << "scoreTime"
 			 << endl;
 
+	}
+	else if( g_SITE_LEVEL_SCORING ) {
+		outf << "specId\t";
+
+		if(g_scoringMethod == 0) outf << "pepProphetProb\t";
+		if(g_scoringMethod == 1) outf << "Xcorr\t";
+		if(g_scoringMethod == 2) outf << "negLogEvalue\t";
+		if(g_scoringMethod == 3) outf << "IonScore\t";
+
+		outf << "numRPS\t"
+			 << "numPPS\t"
+			 << "predictedPeptide\t"
+			 << "deltaScore\t"
+			 << "siteScores\n";
 	}
 	else { // default output
 		outf << "repSpecId\t"

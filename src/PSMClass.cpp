@@ -866,8 +866,11 @@ void PSMClass::calcScore() {
 
 	delete(spectrum); spectrum = NULL;
 
-	// pick the best score and next-best score that is stored in the scoreVec vector
-	pickScores(scoreDeq);
+
+	if(g_SITE_LEVEL_SCORING) calcSiteLevelScores(scoreDeq); // perform site-level scoring
+
+	pickScores(scoreDeq); // pick the best score and next-best score that is stored in scoreDeq
+
 	scoreDeq.clear();
 	time(&end_t);
 
@@ -881,9 +884,6 @@ void PSMClass::calcScore() {
 	if(g_progressCtr % 1000 == 0 ) cerr << endl;
 	//mutex_locker.unlock();
 }
-
-
-
 
 
 
@@ -1052,6 +1052,80 @@ void PSMClass::genDecoys() {
 
 
 
+/***************************************************************************/
+
+// Function to score each phospho-site that is associated with this PSMClass object
+void PSMClass::calcSiteLevelScores(deque<scoreStruct> &scoreDeq) {
+	deque<scoreStruct>::iterator curScoreIter;
+	vector<int>::iterator curSite;
+
+	double bestScorePos = 0; // holds best score where site is phosphorylated
+	double bestScoreNeg = 0; // holds best score where site is NOT phosphorylated
+	double delta = 0;
+	string curPerm, bestPos, bestNeg;
+	char c;
+
+	map<string, double> posMap, negMap;
+	map<string, double>::iterator m;
+
+	if(is_unambiguous) { // set the score for all sites to be the same
+		for(int i = 0; i < numPotentialSites; i++) siteLevelScoreMap[i] = 1e10; //scoreDeq.at(0).score;
+		return;
+	}
+
+	// iterate over sites in sequence
+	for(curSite = styPos.begin(); curSite != styPos.end(); curSite++) {
+
+		c = tolower( peptide.at(*curSite) ); // get lower-case (ie: phosphorylated) version of this residue
+
+		bestScorePos = -BIG_NUM;
+		bestScoreNeg = -BIG_NUM;
+		delta = 0;
+		posMap.clear();
+		negMap.clear();
+
+		// iterate over the scored permutations and record the any where curSite is
+		// phosphorylated
+		for(curScoreIter = scoreDeq.begin(); curScoreIter != scoreDeq.end(); curScoreIter++) {
+			curPerm = curScoreIter->seq;
+
+			if( curPerm.at( *curSite ) == c ) {
+				posMap[ curPerm ] = curScoreIter->score;
+			}
+			else {
+				negMap[ curPerm ] =  curScoreIter->score;
+			}
+		}
+
+		// iterate through posMap to get best score
+		for(m = posMap.begin(); m != posMap.end(); m++) {
+			if(m->second > bestScorePos) {
+				bestScorePos = m->second;
+				bestPos = m->first;
+			}
+		}
+
+		// iterate through posMap to get best score
+		for(m = negMap.begin(); m != negMap.end(); m++) {
+			if(m->second > bestScoreNeg) {
+				bestScoreNeg = m->second;
+				bestNeg = m->first;
+			}
+		}
+
+		delta = bestScorePos - bestScoreNeg;
+
+		siteLevelScoreMap[ *curSite ] = exp(delta);
+	}
+}
+/***************************************************************************/
+
+
+
+
+
+
+
 // Function writes final results out
 void PSMClass::write_results(ofstream &outf) {
 
@@ -1073,6 +1147,10 @@ void PSMClass::write_results(ofstream &outf) {
 		if( isDecoyPep( &bestScore_final.seq ) ) isDecoy1 = 1;
 		if( isDecoyPep( &nextBestScore_final.seq ) ) isDecoy2 = 1;
 
+		if( g_randDecoyAA == false ) { // no FLR estimates are possible
+			localFLR = 1;
+			globalFLR = 1;
+		}
 
 		if(g_FULL_MONTY) {
 			outf << specId << "\t"
@@ -1083,10 +1161,8 @@ void PSMClass::write_results(ofstream &outf) {
 				 << numPhosphoSites << "\t"
 				 << numPotentialSites << "\t";
 
-			//if(isDecoy1 == 1) outf << "NA\tNA\tNA\t";
 			if(isDecoy1 == 1) outf << "NA\tNA\t";
 			else {
-				//outf << luciphorProb << "\t"
 				outf << localFLR << "\t"
 					 << globalFLR << "\t";
 			}
@@ -1102,6 +1178,23 @@ void PSMClass::write_results(ofstream &outf) {
 				 << bestScore_final.fracMatched << "\t"
 				 << scoreTime;
 
+			outf << endl;
+		}
+		else if( g_SITE_LEVEL_SCORING ) {
+			outf << specId << "\t"
+				 << iniProb << "\t"
+				 << numPhosphoSites << "\t"
+				 << numPotentialSites << "\t"
+				 << bestScore_final.seq << "\t"
+				 << delta_score << "\t";
+
+			N = (signed) siteLevelScoreMap.size();
+			int i = 0;
+			for(map<int,double>::iterator m = siteLevelScoreMap.begin(); m != siteLevelScoreMap.end(); m++) {
+				outf << (m->first + 1) << "=" << round_dbl(m->second, 4);
+				i++;
+				if(i < N) outf << "; ";
+			}
 			outf << endl;
 		}
 		else { // default output
@@ -1331,39 +1424,6 @@ void PSMClass::runAscore() {
 			pepScore2 = dmIter->second;
 		}
 	}
-
-
-
-
-//	// Now find the 2nd best scoring permutation
-//	L.clear();
-//	for(smIter = scoreMap.begin(); smIter != scoreMap.end(); smIter++) {
-//		if( smIter->first == pepSeq1 ) continue; // disregard the best permutation.
-//
-//		for(int i = 0; i < 10; i++) {
-//			delta = maxScore - smIter->second.at( i );
-//			L.push_back(delta);
-//		}
-//	}
-//	L.sort();
-//	delta = L.front(); // smallest difference between maxScore and 2nd best score
-//					   // regardless of what peak depth the second permutation is at
-//
-//
-//	// identify the permutation that goes with this 2nd best score
-//	for(smIter = scoreMap.begin(); smIter != scoreMap.end(); smIter++) {
-//		if( smIter->first == pepSeq1 ) continue; // disregard the best permutation.
-//
-//		for(int i = 0; i < 10; i++) {
-//			diff = maxScore - smIter->second.at(i);
-//
-//			if(delta == diff) { // you've found the 2nd best match
-//				pepSeq2   = smIter->first;
-//				pepScore2 = smIter->second.at(i);
-//				break;
-//			}
-//		}
-//	}
 
 
 	// for debugging print out the peptide scores for all permutations at every peak depth
@@ -1609,7 +1669,6 @@ void PSMClass::threaded_scorePSM() {
 	if(g_randDecoyAA)  genDecoys();
 	calcScore();
 }
-
 
 
 

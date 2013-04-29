@@ -51,6 +51,7 @@ extern bool g_WRITE_TOP_TWO;
 extern bool g_captureChargeStateModel; // in case you can't model a charge state, use the next closest charge states' parameters
 extern bool g_useOnlySiteDetermIons; // when true, only site determining ions will be used in scoring a PSM (Luciphor only option)
 extern bool g_usePPM;
+extern bool g_SITE_LEVEL_SCORING;
 extern bool g_removePrecursorNL;  // true means we remove MH-H2O and MH-H3PO4 peaks from spectrum
 extern string g_BUILD_TIME;
 

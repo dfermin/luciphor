@@ -66,6 +66,8 @@ private:
 
 	vector<int> styPos; // array to hold the positions of STY in the peptide sequence
 
+	map<int, double> siteLevelScoreMap; //holds site-level scores, k = site position, v = score
+
 	set<string> phosphoVersionSet;
 	set<string> decoySet;
 
@@ -117,6 +119,7 @@ public:
 	void calcNumDecoyPermutations();
 
 	void pickScores(deque<scoreStruct> &v);
+	void calcSiteLevelScores(deque<scoreStruct> &scoreDeq);
 	void updateSpectrumMap(map<double, double> newSpec, string whichMap);
 	void setSpectrumPtr(string whichMap);
 	void write_results(ofstream &outf);
