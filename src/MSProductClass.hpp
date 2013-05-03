@@ -78,12 +78,14 @@ public:
 	void swapSpectra();
 	double getMass();
 	double getIonMass(string srcStr);
+	void assignFragmentIonsMZ(list<double> &ret);
 	void calc_ppm_err();
 
 
 	double get_min_I() { return min_I; }
 	double get_match_threshold() { return match_threshold; }
 	double getFractionMatched() { return frac_matched; }
+
 
 	map<double, peakStruct> getPeakMap(char whichMap) {
 		if(whichMap == 'm') return matchedPeaks;

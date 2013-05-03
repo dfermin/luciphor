@@ -723,11 +723,13 @@ void PepXMLClass::acquireModelParameters() {
 
 
 			// distance
+			const double CID_ADJUST = 16.0/25.0; //hwchoi adjustment factor 4/5 to std. dev
+
 			meanMd_b = getMean(&M_dist_B);
-			varMd_b  = getVar(&M_dist_B);
+			varMd_b  = getVar(&M_dist_B) * CID_ADJUST;
 
 			meanMd_y = getMean(&M_dist_Y);
-			varMd_y  = getVar(&M_dist_Y);
+			varMd_y  = getVar(&M_dist_Y) * CID_ADJUST;
 
 			meanUd = 0;
 			varUd  = getVar(&U_dist);
@@ -907,7 +909,6 @@ void PepXMLClass::acquireModelParameters_HCD() {
 			M_ints_b.push_back(*L);
 		}
 
-
 		ptr = curPSM->getParamList('m', 'y', 'd');
 		for(L = ptr->begin(); L != ptr->end(); L++) M_dist.push_back(*L);
 
@@ -954,7 +955,7 @@ void PepXMLClass::acquireModelParameters_HCD() {
 		varM_dist  = getVar(&M_dist);
 
 		double meanU_dist = getMode(&U_dist);
-		double varU_dist  = getMode(&U_dist);
+		double varU_dist  = getVar(&U_dist);
 
 		cerr << "\n# PSM: " << zN << " with Score >= " << g_model_prob << endl;
 
@@ -964,9 +965,7 @@ void PepXMLClass::acquireModelParameters_HCD() {
 			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl;
 
 
-//			 << "Distance Matched  (mode, stdev): (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl;
-//			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl
-//			 << "Distance Unmatched (mean, stdev):  (" << meanU_dist << ", " << sqrt(varU_dist) << "); N = " << U_dist.size() << endl;
+		//cerr << "Distance Unmatched (mean, stdev):  (" << meanU_dist << ", " << sqrt(varU_dist) << "); N = " << U_dist.size() << endl;
 
 
 		logF << endl

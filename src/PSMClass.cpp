@@ -330,19 +330,6 @@ void PSMClass::reduceNeutralLossPeak() {
 	double *massPtr = NULL;
 
 
-	// For debugging only
-//	if(specId == "ppeptidemix2_CID_Orbi.2022.2022.2") {
-//		cerr.precision(8);
-//		cerr << endl << specId << endl
-//			 << origModPeptide << endl
-//			 << "mass       = " << precursor_mass << endl
-//			 << "MH         = " << precursor_MH << endl
-//			 << "MH/Z       = " << precursor_mz << endl
-//			 << "MH-H3PO4/Z = " << precursor_H3PO4_mz << endl
-//			 << "MH-H2O/Z   = " << precursor_H2O_mz << endl;
-//	}
-
-
 	// only peptides with an S or T can lose a phosphate so check this peptide sequence
 	// for the required residues
 	int STctr = 0;
@@ -577,6 +564,7 @@ void PSMClass::writeSpectrumToDisk() {
 	// Need one column header because user elected to print features for both of
 	// the predicted peptide permutations
 	if(g_WRITE_TOP_TWO) out << "num\t";
+
 	out << "mz\tI\tion\tabs_dist\tIscore\tDscore\tFinalPeakScore\n";
 
 	int stopAt = 1;
@@ -698,6 +686,7 @@ void PSMClass::classifyPeaks() {
 
 	matchedPeakMap.clear();
 	unmatchedPeakMap.clear();
+	all_theoPeaks.clear();
 
 	if(raw_spectrum.empty()) return; // If this PSM has no spectrum associated with it skip it.
 
@@ -719,8 +708,10 @@ void PSMClass::classifyPeaks() {
 
 		curMSProduct->recordMatchPeaks( use_for_model );
 
-		//curMSProduct->recordMatchPeaks( use_for_model );
-		if( use_for_model ) curMSProduct->addPeakData(&matchedPeakMap, 'm');
+		if( use_for_model ) {
+			curMSProduct->addPeakData(&matchedPeakMap, 'm');
+			curMSProduct->assignFragmentIonsMZ(all_theoPeaks);
+		}
 
 		delete(curMSProduct); curMSProduct = NULL;
 	}
@@ -736,6 +727,9 @@ void PSMClass::classifyPeaks() {
 		 * All of the peaks that *can* be matched for this spectrum in every permutation
 		 * are stored in matchedPeakMap. Now we record all of the remaining peaks as unmatched
 		 */
+		all_theoPeaks.unique();
+		all_theoPeaks.sort();
+
 		map<double, peakStruct>::iterator curMatchedPeakIter;
 		for(curPeak = raw_spectrum.begin(); curPeak != raw_spectrum.end(); curPeak++) {
 			mz = curPeak->first;
@@ -759,7 +753,6 @@ void PSMClass::classifyPeaks() {
 // on this spectrum
 void PSMClass::getMinDistance_unmatched(double mz, double intensity) {
 
-	map<double, peakStruct>::iterator matchedPeak;
 	peakStruct *peakPtr = NULL;
 
 	list<double> distance_list;
@@ -768,14 +761,26 @@ void PSMClass::getMinDistance_unmatched(double mz, double intensity) {
 	multimap<double, double> distMultiMap;
 	multimap<double, double>::iterator mm;
 
-	for(matchedPeak = matchedPeakMap.begin(); matchedPeak != matchedPeakMap.end(); matchedPeak++) {
-		minDist = matchedPeak->first - mz;
+	list<double>::iterator theoPeak;
+	for(theoPeak = all_theoPeaks.begin(); theoPeak != all_theoPeaks.end(); theoPeak++) {
+		minDist = *theoPeak - mz;
 		if( dbl_isnan(minDist) ) minDist = TINY_NUM;
 		absDist = fabs( minDist );
 
 		distance_list.push_back( absDist );
-		distMultiMap.insert(pair<double, double>(absDist, minDist));
+		distMultiMap.insert( pair<double, double>(absDist, minDist) );
 	}
+
+
+//	map<double, peakStruct>::iterator matchedPeak;
+//	for(matchedPeak = matchedPeakMap.begin(); matchedPeak != matchedPeakMap.end(); matchedPeak++) {
+//		minDist = matchedPeak->first - mz;
+//		if( dbl_isnan(minDist) ) minDist = TINY_NUM;
+//		absDist = fabs( minDist );
+//
+//		distance_list.push_back( absDist );
+//		distMultiMap.insert(pair<double, double>(absDist, minDist));
+//	}
 
 	// From here down, the function picks the minimum distance of this
 	// unmatched peak to the nearest matched peak for this permutation
@@ -1052,8 +1057,6 @@ void PSMClass::genDecoys() {
 
 
 
-/***************************************************************************/
-
 // Function to score each phospho-site that is associated with this PSMClass object
 void PSMClass::calcSiteLevelScores(deque<scoreStruct> &scoreDeq) {
 	deque<scoreStruct>::iterator curScoreIter;
@@ -1069,7 +1072,7 @@ void PSMClass::calcSiteLevelScores(deque<scoreStruct> &scoreDeq) {
 	map<string, double>::iterator m;
 
 	if(is_unambiguous) { // set the score for all sites to be the same
-		for(int i = 0; i < numPotentialSites; i++) siteLevelScoreMap[i] = exp( scoreDeq.at(0).score );
+		for(int i = 0; i < numPotentialSites; i++) siteLevelScoreMap[i] = exp(scoreDeq.at(0).score);
 		return;
 	}
 
@@ -1118,11 +1121,6 @@ void PSMClass::calcSiteLevelScores(deque<scoreStruct> &scoreDeq) {
 		siteLevelScoreMap[ *curSite ] = exp(delta);
 	}
 }
-/***************************************************************************/
-
-
-
-
 
 
 
@@ -1706,24 +1704,6 @@ double PSMClass::getNumPerms() {
 	return ret;
 }
 
-
-//// Function returns string describing parameters for permutations
-//string PSMClass::countInfo() {
-//	string ret = "";
-//	int N = (signed) peptide.length();
-//	int n = N - numPotentialSites;
-//
-//
-//	ret = specId + "\t"
-//		 + modPeptide + "\t"
-//		 + int2string(N) + "\t"
-//		 + int2string(numPotentialSites) + "\t"
-//		 + int2string(numPhosphoSites) + "\t"
-//		 + int2string(numPermutations) + "\t"
-//		 + int2string(numDecoyPermutations) + "\n";
-//
-//	return ret;
-//}
 
 
 

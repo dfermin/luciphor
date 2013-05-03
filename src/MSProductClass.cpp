@@ -42,15 +42,6 @@ MSProductClass::MSProductClass(string the_specId, string txt, int Z, double ntm)
 	seq_mass = getMass() + nterm_mass;
 	makeIons(); // fragment the given sequence into B and Y ions
 	totNumIons = ((signed)b_ions.size()) + ((signed)y_ions.size());
-
-//	if(g_DEBUG_MODE) {
-//		cerr << seq << endl;
-//		map<string, double>::iterator m;
-//		for(m = b_ions.begin(); m != b_ions.end(); m++) cerr << m->first << "\t" << m->second << endl;
-//		for(m = y_ions.begin(); m != y_ions.end(); m++) cerr << m->first << "\t" << m->second << endl;
-//		cerr << endl;
-//	}
-
 }
 
 
@@ -92,7 +83,6 @@ double MSProductClass::getIonMass(string srcStr) {
 		tmp = ionStr.substr(0, f3);
 		ionStr = tmp;
 		ret += -H3PO4;
-		//ret += neutralLossMap[ "-H3PO4" ];
 	}
 
 
@@ -148,8 +138,8 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 	size_t f;
 
 	bool hasPhospho = false;
-	bool looseNH3 = false;
-	bool looseH2O = false;
+	bool loseNH3 = false;
+	bool loseH2O = false;
 
 
 	// In CID data there is sufficient noise in the spectra to allow for matches
@@ -174,6 +164,7 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 	if( H3PO4ctr > 0 ) hasPhospho = true; // has at least 1 phosphorylated AA
 
 
+/*****************************************************************************
 	// determine if the ion can lose ammonia or water
 	int NH3ctr = 0, H2Octr = 0;
 	for(int i = 0; i < N; i++) {
@@ -188,18 +179,18 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 		if(ion.at(i) == 'D') H2Octr++;
 	}
 
-	if( NH3ctr > 0 ) looseNH3 = true;
-	if( H2Octr > 0 ) looseH2O = true;
+	if( NH3ctr > 0 ) loseNH3 = true;
+	if( H2Octr > 0 ) loseH2O = true;
 
 
 	// For HCD data, neutral loss peaks help, but they don't help much
 	// for CID data. Therefore, don't generate the H2O and NH3 neutral loss
 	// peaks for CID data
 	if( !g_IS_HCD ) {
-		looseNH3 = false;
-		looseH2O = false;
+		loseNH3 = false;
+		loseH2O = false;
 	}
-
+*******************************************************************************/
 
 
 	double extraProton = 0; // Computes: ( H * (z-1) ) <- you need this for dealing with multiple charge states;
@@ -226,7 +217,7 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 			} // end if(hasPhospho)
 
 
-			if(looseNH3) {
+			if(loseNH3) {
 				new_ion.clear();
 				new_ion = "b^" + Nstr + ":" + ion + "-NH3";
 				if(z > 1) new_ion += "/+" + int2string(z);
@@ -239,10 +230,10 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 					b_ions[ new_ion ] = mz_value;
 					b_ion_set.insert(new_ion);
 				}
-			} // end if(looseNH3)
+			} // end if(loseNH3)
 
 
-			if(looseH2O) {
+			if(loseH2O) {
 				new_ion.clear();
 				new_ion = "b^" + Nstr + ":" + ion + "-H2O";
 				if(z > 1) new_ion += "/+" + int2string(z);
@@ -255,7 +246,7 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 					b_ions[ new_ion ] = mz_value;
 					b_ion_set.insert(new_ion);
 				}
-			} // end if(looseH2O)
+			} // end if(loseH2O)
 
 		} // end b-ion
 		else if(ion_type == 'y') {
@@ -277,7 +268,7 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 			} // end if(hasPhospho)
 
 
-			if(looseNH3) {
+			if(loseNH3) {
 				new_ion.clear();
 				new_ion = "y^" + Nstr + ":" + ion + "-NH3";
 				if(z > 1) new_ion += "/+" + int2string(z);
@@ -290,10 +281,10 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 					y_ions[ new_ion ] = mz_value;
 					y_ion_set.insert(new_ion);
 				}
-			} // end if(looseNH3)
+			} // end if(loseNH3)
 
 
-			if(looseH2O) {
+			if(loseH2O) {
 				new_ion.clear();
 				new_ion = "y^" + Nstr + ":" + ion + "-H2O";
 				if(z > 1) new_ion += "/+" + int2string(z);
@@ -306,7 +297,7 @@ void MSProductClass::generate_NL_ionsMZ(string ion, char ion_type) {
 					y_ions[ new_ion ] = mz_value;
 					y_ion_set.insert(new_ion);
 				}
-			} // end if(looseH2O)
+			} // end if(loseH2O)
 
 		} // end y-ion
 	}
@@ -434,6 +425,9 @@ void MSProductClass::recordMatchPeaks(bool forModeling ) {
 	peakStruct *peakPtr = NULL;
 	bool isNLpeak = false;
 
+	ofstream winF;
+	if(g_DEBUG_MODE) winF.open("mzErrWinMatched.txt", ios::app);
+
 	// define the bimap type we will use
 	// For our BIMAP left bimap: k = mz , v = intensity
 	//              right bimap: k = intensity, v = mz
@@ -481,6 +475,13 @@ void MSProductClass::recordMatchPeaks(bool forModeling ) {
 				if( (mz >= a) && (mz <= b) ) { // record match
 					bm.insert( bm_type::value_type(mz, intensity) );
 					I.push_back(intensity);
+
+					if(g_DEBUG_MODE) {
+						winF << specId << "\t"
+							 << theo_mz << "\t"
+							 << mz << "\t"
+							 << intensity << endl;
+					}
 				}
 			}
 
@@ -517,6 +518,7 @@ void MSProductClass::recordMatchPeaks(bool forModeling ) {
 
 		}
 	} // end for loop over iter
+	if(g_DEBUG_MODE) winF.close();
 }
 
 
@@ -717,6 +719,14 @@ void MSProductClass::addPeakData(map<double, peakStruct> *targetPtr, char whichM
 }
 
 
+
+// Function returns the m/z values for all of the theoretical peaks for this peptide perumtation
+void MSProductClass::assignFragmentIonsMZ(list<double> &ret) {
+	map<string, double>::iterator ion;
+
+	for(ion = b_ions.begin(); ion != b_ions.end(); ion++) ret.push_back(ion->second);
+	for(ion = y_ions.begin(); ion != y_ions.end(); ion++) ret.push_back(ion->second);
+}
 
 
 
@@ -1119,20 +1129,6 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 			x = Iscore + Dscore;
 
 			score += x;
-
-			/******************************************************
-			 *
-			 * Hyungwon removed the intensity component to the HCD score in this code.
-			 * It seems that the intensity component is unnessary for HCD data.
-			 *
-				if(dbl_isnan(Dscore) || isInfinite(Dscore) ) x = 0;
-				else x = Dscore;
-
-				score += x;
-			 *
-			/*************************************/
-
-
 
 
 

@@ -130,20 +130,6 @@ void print_usage() {
 		 << "                             2 = use neutral loss peaks ONLY for model parameter acquisition\n"
 		 << "                             3 = use them only in final scoring of phospho-peptides (ie: not for model parameter acquisition)\n\n"
 
-//		 << "   -P <score_method>         Use this option if you want to pick spectra based upon\n"
-//		 << "                             a search engine score instead of PeptideProphet probabilities\n"
-//		 << "                             *** You MUST use -M _WITH_ -P ***\n"
-//		 << "                             -P sequest=<Xcorr>   Use the Sequest XCorr values\n"
-//		 << "                             -P xtandem=<-log(Evalue)>  Use negative log of X-tandem expect score: -log(Evalue)\n"
-//		 << "                             -P mascot=<ionScore> Use the Mascot ion-score\n\n"
-//
-//		 << "   -M <score_method>         Use this option if you want to pick spectra for modeling based upon \n"
-//		 << "                             a search engine score instead of probabilities.\n"
-//		 << "                             *** You MUST use -P _WITH_ -M ***\n"
-//		 << "                             -M sequest=<Xcorr>   Use the Sequest XCorr values\n"
-//		 << "                             -M xtandem=<-log(Evalue)>  Use negative log of X-tandem expect score: -log(Evalue)\n"
-//		 << "                             -M mascot=<ionScore> Use the Mascot ion-score\n\n"
-
 		 << "   --Sl <file>               Score and report only results for the PSMs in this file, one PSM ID per line\n"
 		 << "   --noDecoys                Do *NOT* estimate False Localization Rate (FLR) using decoy phosphorylation sites\n"
 		 << "   --SDI                     Use only fragment ions that distinguish between the top two permutations of a PSM when performing final scoring\n\n"
@@ -250,12 +236,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 		case 'e':
 			g_ext = optarg;
 			break;
-//		case 'M':
-//			modelingStr = new string( optarg );
-//			break;
-//		case 'P':
-//			scoringStr = new string( optarg );
-//			break;
+
 
 		case 0: /* for long options */
 			for(int k = 0; k < 8; k++) {
@@ -349,22 +330,6 @@ void parse_command_line_args(int argc, char *argv[]) {
 	// you can't capture neighboring charge states if you chose to score only
 	// PSMs of a specific charge state
 	if(g_LIMIT_CHARGE_STATE) g_captureChargeStateModel = false;
-
-
-	// this handles alternative scoring function error checking
-//	if( (scoringStr != NULL) && (modelingStr == NULL) ) {
-//		cerr << "\nERROR: -M is required with -P option\n\n";
-//		print_usage();
-//		exit(0);
-//	}
-//	else if( (scoringStr == NULL) && (modelingStr != NULL) ) {
-//		cerr << "\nERROR: -P is required with -M option\n\n";
-//		print_usage();
-//		exit(0);
-//	}
-//	else if( (scoringStr != NULL) && (modelingStr != NULL) ) {
-//		parse_alternative_scoring(scoringStr, modelingStr);
-//	}
 
 
 	if(g_NUM_THREADS > (signed) boost::thread::hardware_concurrency() ) {

@@ -79,6 +79,7 @@ private:
 	list<double> intensities;
 	list<double> M_ints_b, M_ints_y, U_ints_local;
 	list<double> M_dist_b, M_dist_y, U_dist_local;
+	list<double> all_theoPeaks;
 
 	map<double, peakStruct> matchedPeakMap; // holds peaks that were matched
 	map<double, peakStruct> unmatchedPeakMap; // holds unmatched peaks
