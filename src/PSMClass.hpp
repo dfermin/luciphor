@@ -48,6 +48,7 @@ private:
 	double nterm_mass;
 	double luciphor_deltaScore;
 	double scoreTime;
+	double maxSiteLevelScore;
 	double mz_err; // based upon charge state of peptide, used for peak matching
 	double NLprob; // probability score for identified neutral loss peak
 

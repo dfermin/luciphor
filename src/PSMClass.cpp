@@ -1072,7 +1072,10 @@ void PSMClass::calcSiteLevelScores(deque<scoreStruct> &scoreDeq) {
 	map<string, double>::iterator m;
 
 	if(is_unambiguous) { // set the score for all sites to be the same
-		for(int i = 0; i < numPotentialSites; i++) siteLevelScoreMap[i] = exp(scoreDeq.at(0).score);
+		for(int i = 0; i < numPotentialSites; i++) {
+			siteLevelScoreMap[i] = exp(scoreDeq.at(0).score);
+			maxSiteLevelScore = exp(scoreDeq.at(0).score);
+		}
 		return;
 	}
 
@@ -1119,6 +1122,12 @@ void PSMClass::calcSiteLevelScores(deque<scoreStruct> &scoreDeq) {
 		delta = bestScorePos - bestScoreNeg;
 
 		siteLevelScoreMap[ *curSite ] = exp(delta);
+	}
+
+	// Here we are selecting out the best site-level score observed for this PSM
+	maxSiteLevelScore = -1000;
+	for(map<int,double>::iterator m = siteLevelScoreMap.begin(); m != siteLevelScoreMap.end(); m++) {
+		if(m->second > maxSiteLevelScore) maxSiteLevelScore = m->second;
 	}
 }
 
@@ -1184,7 +1193,8 @@ void PSMClass::write_results(ofstream &outf) {
 				 << numPhosphoSites << "\t"
 				 << numPotentialSites << "\t"
 				 << bestScore_final.seq << "\t"
-				 << delta_score << "\t";
+				 << delta_score << "\t"
+				 << round_dbl(maxSiteLevelScore, 4) << "\t";
 
 			N = (signed) siteLevelScoreMap.size();
 			int i = 0;

@@ -1127,6 +1127,7 @@ void PepXMLClass::writeLuciphorResults() {
 			 << "numPPS\t"
 			 << "predictedPeptide\t"
 			 << "deltaScore\t"
+			 << "maxSiteScore\t"
 			 << "siteScores\n";
 	}
 	else { // default output
