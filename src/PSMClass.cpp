@@ -1072,8 +1072,8 @@ void PSMClass::calcSiteLevelScores(deque<scoreStruct> &scoreDeq) {
 	map<string, double>::iterator m;
 
 	if(is_unambiguous) { // set the score for all sites to be the same
-		for(int i = 0; i < numPotentialSites; i++) {
-			siteLevelScoreMap[i] = exp(scoreDeq.at(0).score);
+		for(curSite = styPos.begin(); curSite != styPos.end(); curSite++) {
+			siteLevelScoreMap[ *curSite ] = exp(scoreDeq.at(0).score);
 			maxSiteLevelScore = exp(scoreDeq.at(0).score);
 		}
 		return;
