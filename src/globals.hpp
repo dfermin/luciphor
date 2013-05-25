@@ -32,11 +32,12 @@ extern bool g_writeDTA; // if true, user wants to write spectra to disk
 extern bool g_userDefinedOutput; // true means the user gave a name for the output file
 extern double g_prob_threshold; // min. probability a peptide must have to be parsed
 extern double g_model_prob; // min. prob. a peptide must have to be used for modeling
-extern double g_MZ_ERR; // // fragment ion mass tolerance
+extern double g_MZ_ERR; // fragment ion mass tolerance
+extern double g_DECOY_MZ_ERR; // fragment ion tolerance for decoys
 extern double g_MIN_I; // min. intensity a peak needs to be considered for matching
 extern double g_MIN_DIST; // min. distance (in log scale) tolerated for unmatched peaks
 extern map<char, double> AAmass; // hold masses for amino acids
-extern bool g_DEBUG_MODE; // true means the program is running in debug mode
+//extern bool g_DEBUG_MODE; // true means the program is running in debug mode
 extern bool g_FULL_MONTY; // true means the program should score and report all spectra
 extern bool g_IS_HCD; // true means the data being processed is HCD data
 extern bool g_NO_NL_PEAKS; // true means that neutral loss fragment ions will not be considered at all
@@ -55,6 +56,7 @@ extern bool g_SITE_LEVEL_SCORING;
 extern bool g_removePrecursorNL;  // true means we remove MH-H2O and MH-H3PO4 peaks from spectrum
 extern string g_BUILD_TIME;
 
+extern int g_DEBUG_MODE;
 extern int g_scoringMethod; // used to manage scoring metric
 extern double g_dist_adj;
 extern double g_NUM_PERMS_LIMIT;

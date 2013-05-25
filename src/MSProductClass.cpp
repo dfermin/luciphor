@@ -39,6 +39,11 @@ MSProductClass::MSProductClass(string the_specId, string txt, int Z, double ntm)
 	mz_err = g_MZ_ERR * 0.5;
 	if(g_usePPM) mz_err = g_MZ_ERR * PPM;
 
+	if(isDecoyPep(&seq) && g_IS_HCD ) {
+		mz_err = g_DECOY_MZ_ERR * 0.5;
+		if(g_usePPM) mz_err = g_DECOY_MZ_ERR * PPM;
+	}
+
 	seq_mass = getMass() + nterm_mass;
 	makeIons(); // fragment the given sequence into B and Y ions
 	totNumIons = ((signed)b_ions.size()) + ((signed)y_ions.size());
@@ -426,7 +431,16 @@ void MSProductClass::recordMatchPeaks(bool forModeling ) {
 	bool isNLpeak = false;
 
 	ofstream winF;
-	if(g_DEBUG_MODE) winF.open("mzErrWinMatched.txt", ios::app);
+	if(g_DEBUG_MODE == 4) {
+		if(fileExists("mzErrWinMatched.txt") ) winF.open("mzErrWinMatched.txt", ios::app);
+		else {
+			winF.open("mzErrWinMatched.txt", ios::out);
+			winF << "specId\t"
+				 << "theoMZ\t"
+				 << "obsMZ\t"
+				 << "diff\n";
+		}
+	}
 
 	// define the bimap type we will use
 	// For our BIMAP left bimap: k = mz , v = intensity
@@ -476,11 +490,12 @@ void MSProductClass::recordMatchPeaks(bool forModeling ) {
 					bm.insert( bm_type::value_type(mz, intensity) );
 					I.push_back(intensity);
 
-					if(g_DEBUG_MODE) {
+					if(g_DEBUG_MODE == 4) {
 						winF << specId << "\t"
 							 << theo_mz << "\t"
 							 << mz << "\t"
-							 << intensity << endl;
+							 << (theo_mz - mz)
+							 << endl;
 					}
 				}
 			}
@@ -518,80 +533,8 @@ void MSProductClass::recordMatchPeaks(bool forModeling ) {
 
 		}
 	} // end for loop over iter
-	if(g_DEBUG_MODE) winF.close();
+	if(g_DEBUG_MODE == 4) winF.close();
 }
-
-
-
-/*********************************
-// Function records the unmatched peaks and their distances from the nearest
-// matched peak. This function is only used to get the modeling parameters
-void MSProductClass::recordUnmatchedPeaks() {
-
-	map<double, peakStruct>::iterator matchedPeak, mIter;
-	map<double, double>::iterator curPeak;
-	double mz, intensity;
-	peakStruct *peakPtr = NULL;
-
-	list<double> distance_list;
-	double minDist, absDist;
-	double tmpDist;
-
-	multimap<double, double> distMultiMap;
-	multimap<double, double>::iterator mm;
-
-	unmatchedPeaks.clear();
-
-	for(curPeak = local_spectrum.begin(); curPeak != local_spectrum.end(); curPeak++) {
-		mz = curPeak->first;
-		intensity = curPeak->second;
-
-		matchedPeak = matchedPeaks.find(mz);
-		if(matchedPeak == matchedPeaks.end()) { // unmatched peak
-			minDist = 0;
-			distance_list.clear();
-
-			// record the distances (along the m/z values) of this unmatched peak
-			// from all of the ions in 'matchedPeaks' map. Store the distances into
-			// the distance_list.
-			for(mIter = matchedPeaks.begin(); mIter != matchedPeaks.end(); mIter++) {
-				minDist = mIter->first - mz;
-				if( dbl_isnan(minDist) ) minDist = BIG_NUM;
-				absDist = fabs( minDist );
-
-				distance_list.push_back( absDist );
-				distMultiMap.insert(pair<double, double>(absDist, minDist));
-			}
-
-
-			// From here down, the function picks the minimum distance of this
-			// unmatched peak to the nearest matched peak for this permutation
-
-			distance_list.sort(); // sorted low-to-high
-			mm = distMultiMap.find( distance_list.front() );
-			absDist = (double) mm->first;
-
-			distance_list.clear();
-			for(mm = distMultiMap.equal_range(absDist).first; mm != distMultiMap.equal_range(absDist).second; mm++) {
-				distance_list.push_back( (*mm).second );
-			}
-			distance_list.unique();
-			distance_list.sort();
-
-			peakPtr = new peakStruct;
-			peakPtr->intensity = intensity;
-			tmpDist = distance_list.back();
-			peakPtr->MZdistance = mz_adjust_dist(    distance_list.back()   );  //////HW: 
-			peakPtr->ionType = 'u';
-
-			if( fabs(tmpDist) > 5 && fabs(peakPtr->MZdistance) < 0.25 ) unmatchedPeaks[ mz ] = *peakPtr;
-
-			delete(peakPtr); peakPtr = NULL;
-		}
-	}
-	distance_list.clear();
-}
-***************************/
 
 
 
@@ -781,43 +724,6 @@ scoreStruct MSProductClass::scorePermutation(modelParamStruct *paramPtr, string 
 
 
 // Function returns the unmatched peaks for the current spectrum object
-/*
-void MSProductClass::getUnmatchedPeaks(map<double, double> *srcMapPtr, map<double, peakStruct> *Mptr, map<double, peakStruct> *Uptr) {
-	map<double, double>::iterator curObsPeak;
-	map<double, peakStruct>::iterator m_iter;
-	peakStruct *peakPtr = NULL;
-	list<double> D;
-	double mz, intensity, dist;
-
-	for(curObsPeak = srcMapPtr->begin(); curObsPeak != srcMapPtr->end(); curObsPeak++) {
-		mz = curObsPeak->first;
-		intensity = curObsPeak->second;
-
-		m_iter = Mptr->find(mz);
-		if(m_iter == Mptr->end()) { // unmatched peak
-
-			// this loop is for computing the distance to the nearest matched peak
-			D.clear();
-			for(m_iter = Mptr->begin(); m_iter != Mptr->end(); m_iter++) {
-
-				dist = fabs(m_iter->first - mz);
-				D.push_back( dist );
-			}
-			D.sort(); // sorted low to high
-			peakPtr = new peakStruct;
-			peakPtr->intensity = intensity;
-			peakPtr->MZdistance = mz_adjust_dist( D.front() );      //// WHY LOG: removed log
-			peakPtr->ionType= 'u';
-			Uptr->insert(pair<double, peakStruct>(mz, *peakPtr));
-
-			delete(peakPtr); peakPtr = NULL;
-			D.clear();
-		}
-	}
-}
-*/
-
-// Function returns the unmatched peaks for the current spectrum object
 void MSProductClass::getUnmatchedPeaks(map<double, double> *srcMapPtr, map<double, peakStruct> *Mptr, map<double, peakStruct> *Uptr) {
 	map<double, double>::iterator curObsPeak;
 	map<double, peakStruct>::iterator m_iter;
@@ -898,7 +804,7 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 
 	N = (signed)Mpeaks->size();
 
-	if(g_DEBUG_MODE) {
+	if(g_DEBUG_MODE == 2) {
 		// check to see if the debug file already exists, if so, open it for
 		// appending. Otherwise, create it.
 		if( fileExists("ionScores.debug") ) {
@@ -992,7 +898,7 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 			/*  This is where we print out scores for each ion */
 			/***************************************************/
 			/***************************************************/
-			if(g_DEBUG_MODE) {
+			if(g_DEBUG_MODE == 2) {
 				debug_ionScores << specId << "\t"
 								<< ionSeq << "\t"
 								<< mz << "\t"
@@ -1010,9 +916,8 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 		}
 	}
 
-	if(g_DEBUG_MODE) debug_ionScores.close();
+	if(g_DEBUG_MODE == 2) debug_ionScores.close();
 
-	// if(score < 0) score = 0;
 	return score;
 }
 
@@ -1042,7 +947,7 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 	string ionSeq, ss;
 
 
-	if(g_DEBUG_MODE) {
+	if(g_DEBUG_MODE == 2) {
 		// check to see if the debug file already exists, if so, open it for
 		// appending. Otherwise, create it.
 		if( fileExists("ionScores.debug") ) {
@@ -1126,7 +1031,7 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 			if(dbl_isnan(Iscore) || isInfinite(Iscore) ) Iscore = 0;
 			if(dbl_isnan(Dscore) || isInfinite(Dscore) ) Dscore = 0;
 
-			x = Iscore + Dscore;
+			x = Iscore + Dscore;  // official HCD scoring method
 
 			score += x;
 
@@ -1137,7 +1042,7 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 			/*  This is where we print out scores for each ion */
 			/***************************************************/
 			/***************************************************/
-			if(g_DEBUG_MODE) {
+			if(g_DEBUG_MODE == 2) {
 				debug_ionScores << specId << "\t"
 								<< ionSeq << "\t"
 								<< mz << "\t"
@@ -1157,11 +1062,8 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 		}
 	}
 
-	if(g_DEBUG_MODE) debug_ionScores.close();
+	if(g_DEBUG_MODE == 2) debug_ionScores.close();
 
-
-
-	// if(score < 0) score = 0;
 	return score;
 }
 
@@ -1259,164 +1161,8 @@ void MSProductClass::keepOnlySiteDetermIons(set<string> &ions) {
 		if(m->first.at(0) == 'b') b_ions[ m->first ] = m->second;
 
 		if(m->first.at(0) == 'y') y_ions[ m->first ] = m->second;
-
-		if(g_DEBUG_MODE) {
-			cerr << "|" << seq << "|\t" << m->first << "\t" << m->second << endl;
-		}
 	}
 }
 
 
-
-// Function generates site-determining ions for the sequence in 'seq'
-//void MSProductClass::makeSiteDetermIons() {
-//	int N = (signed)seq.length();
-//	vector<int> v_b(N,0), v_y(N,0); // initalized to length N with zero's
-//	vector<string> B, Y;
-//	int ctr;
-//	size_t found;
-//	string modChars = "sty234567890@#$%&;?~";
-//	string b_ion_str, y_ion_str, tmp, rev_str;
-//	int numPhos = 0;
-//
-//	boost::regex ion_regex("^([by].\\d+:\\w+)(-.*)?(\/\+\\d)?");
-//	boost::smatch matches;
-//
-//
-//	// compute number of phosphorylation sites in string
-//	for(int i = 0; i < N; i++) {
-//		char c = seq.at(i);
-//		found = modChars.find(c);
-//		if(found != string::npos) numPhos++;
-//	}
-//
-//
-//	ctr = 0;
-//	for(int i = 0; i < N; i++) {
-//		char c = seq.at(i);
-//		found = modChars.find(c);
-//		if(found != string::npos) ctr++;
-//		v_b.at(i) = ctr;
-//	}
-//
-//
-//	ctr = 0;
-//	for(int i = N-1; i > -1; i--) {
-//		char c = seq.at(i);
-//		found = modChars.find(c);
-//		if(found != string::npos) ctr++;
-//		v_y.at(i) = ctr;
-//	}
-//
-//
-//	/*
-//	 * Wherever the v_b and v_y vectors have a number equal to 'numPhos'
-//	 * for this peptide, that is the ion ladder number for a site-determining ion
-//	 */
-//	// B-ions
-//	for(int i = 1; i < N-1; i++) { // we do not include/keep the last ion (which is the whole peptide)
-//		if( v_b.at(i) == numPhos ) {
-//			b_ion_str = seq.substr(0, (i+1) );
-//			tmp = "b^" + int2string((i+1)) + ":" + b_ion_str;
-//			B.push_back(tmp);
-//		}
-//	}
-//
-//	// Y-ions (we have to work from the C-term (right-hand-side) of the string)
-//	for(int i = N-1; i > 0; i--) {
-//		if(v_y.at(i) == numPhos) {
-//			int j = N - i;
-//			y_ion_str = seq.substr(i, j);
-//			tmp = "y^" + int2string(j) + ":" + y_ion_str;
-//			Y.push_back(tmp);
-//		}
-//	}
-//
-//
-//	if(g_DEBUG_MODE) {
-//		cerr << "\nBEFORE site determining ion trimming:\n";
-//		for(map<string, double>::iterator mm = b_ions.begin(); mm != b_ions.end(); mm++) {
-//			cerr << mm->first << endl;
-//		}
-//		for(map<string, double>::iterator mm = y_ions.begin(); mm != y_ions.end(); mm++) {
-//			cerr << mm->first << endl;
-//		}
-//		cerr << endl;
-//	}
-//
-//
-//
-//	/*
-//	 * Now that we have the site specific ion strings, we will clean out
-//	 * the 'b/y_ion_set' sets and store only these cases
-//	 */
-//	map<string, double> *tmpIonMap = NULL;
-//	set<string> *tmpStrSet = NULL;
-//	set<string>::iterator setIter;
-//	vector<string>::iterator v;
-//
-//	// b-ions
-//	tmpIonMap = new map<string, double>;
-//	tmpStrSet = new set<string>;
-//	for(v = B.begin(); v != B.end(); v++) {
-//		// find this site-determining ion inside of the original b_ion_set
-//		// Then record it's various forms (ie: different charge states)
-//		for(setIter = b_ion_set.begin(); setIter != b_ion_set.end(); setIter++) {
-//
-//			boost::regex_match(*setIter, matches, ion_regex);
-//			tmp.clear();
-//			tmp.assign(matches[1].first, matches[1].second);
-//
-//			if(tmp.compare(*v) == 0) {
-//				tmpIonMap->insert(pair<string, double>(*setIter, b_ions[ *setIter ]));
-//				tmpStrSet->insert(*setIter);
-//			}
-//		}
-//
-//	}
-//	b_ion_set.clear();
-//	b_ion_set = *tmpStrSet;
-//	delete(tmpStrSet);
-//	b_ions.clear();
-//	b_ions = *tmpIonMap;
-//	delete(tmpIonMap);
-//
-//	// y-ions
-//	tmpIonMap = new map<string, double>;
-//	tmpStrSet = new set<string>;
-//	for(v = Y.begin(); v != Y.end(); v++) {
-//		// find this site-determining ion inside of the original y_ion_set
-//		// Then record it's various forms (ie: different charge states)
-//		for(setIter = y_ion_set.begin(); setIter != y_ion_set.end(); setIter++) {
-//
-//			boost::regex_match(*setIter, matches, ion_regex);
-//			tmp.clear();
-//			tmp.assign(matches[1].first, matches[1].second);
-//
-//			if(tmp.compare(*v) == 0) {
-//				tmpIonMap->insert(pair<string, double>(*setIter, y_ions[ *setIter ]));
-//				tmpStrSet->insert(*setIter);
-//			}
-//		}
-//	}
-//	y_ion_set.clear();
-//	y_ion_set = *tmpStrSet;
-//	delete(tmpStrSet);
-//	y_ions.clear();
-//	y_ions = *tmpIonMap;
-//	delete(tmpIonMap);
-//
-//
-//
-//	if(g_DEBUG_MODE) {
-//		cerr << "AFTER site determining ion trimming:\n";
-//		for(map<string, double>::iterator mm = b_ions.begin(); mm != b_ions.end(); mm++) {
-//			cerr << mm->first << endl;
-//		}
-//		for(map<string, double>::iterator mm = y_ions.begin(); mm != y_ions.end(); mm++) {
-//			cerr << mm->first << endl;
-//		}
-//		cerr << endl;
-//	}
-//}
 

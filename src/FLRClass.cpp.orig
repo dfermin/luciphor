@@ -38,16 +38,17 @@ FLRClass::FLRClass(deque<flrStruct> *ptr, double d) {
 
 	deque<flrStruct>::iterator iter;
 	for(iter = allPSMs.begin(); iter != allPSMs.end(); iter++) {
-		if(iter->deltaScore > 0.5) { 
+		if(iter->deltaScore >= 0.5) { 
 			if(iter->isDecoy) decoyDeq.push_back( *iter );
 			else realDeq.push_back( *iter );
 		}
 	}
 
+
 	Nreal = (signed) realDeq.size();
 	Ndecoy = (signed) decoyDeq.size();
 
-    // initialize tickMarks deque
+	// initialize tickMarks deque
 	tickMarks.resize(NMARKS);
 	tickMarks[0] = 0.0;
 	for(int i = 0; i < NMARKS; i++) {
@@ -197,7 +198,7 @@ void FLRClass::calcBothFDRs() {
 	i = 0;
 	for(curScore = realDeq.begin(); curScore != realDeq.end(); curScore++) {
 		tmp_score = curScore->deltaScore;
-		if(tmp_score < 0.1) tmp_score = 0.1;		
+		if(tmp_score < 0.5) tmp_score = 0.5;		
 		// local FDR
 		ratio = 0;
 		AUC_rev_0 = getLocalAUC(tmp_score, 0);
@@ -609,5 +610,45 @@ flrStruct FLRClass::getFLR(string specId) {
 }
 
 
+
+
+void FLRClass::fart() {
+	deque<flrStruct>::iterator real_iter;
+	deque<double>::iterator globalFDR_iter, localFDR_iter;
+	deque<double>::iterator raw_gFDR_iter, raw_lFDR_iter;
+
+	real_iter = realDeq.begin();
+	globalFDR_iter = globalFDR.begin();
+	localFDR_iter = localFDR.begin();
+	raw_gFDR_iter = raw_globalFDR.begin();
+	raw_lFDR_iter = raw_localFDR.begin();
+
+	/*
+	cout << "specId\t"
+		 << "deltaScore\t"
+		 << "FLR\t"
+		 << "raw FLR\t"
+		 << "localFLR\t"
+		 << "raw localFLR\n";
+
+	while(real_iter != realDeq.end()) {
+		cout << real_iter->specId << "\t"
+			 << real_iter->deltaScore << "\t"
+			 << *globalFDR_iter << "\t"
+			 << *raw_gFDR_iter << "\t"
+			 << *localFDR_iter << "\t"
+			 << *raw_lFDR_iter << "\n";
+
+		real_iter++;
+		globalFDR_iter++;
+		localFDR_iter++;
+		raw_gFDR_iter++;
+		raw_lFDR_iter++;
+	}
+
+	cout << endl;
+
+	*/
+}
 
 

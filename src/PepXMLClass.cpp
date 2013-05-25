@@ -62,6 +62,8 @@ void PepXMLClass::parsePepXMLfile() {
 	int score = 0;  // must be >= 4 or the PSM doesn't get recorded, some PSMs don't have any modifications
 	PSMClass *curPSM = NULL;
 
+	deque<matchDataStruct> MDSdeq;
+
 	numPSMs_forModeling = 0;
 
 	PSMvec = new deque<PSMClass>;
@@ -214,8 +216,6 @@ void PepXMLClass::parsePepXMLfile() {
 					// we'll use this spectrum for estimating the model parameters
 					if(curPSM->useForModeling()) numPSMs_forModeling++;
 
-//					PepClass *pc = new PepClass(mds);
-//					delete(pc); pc = NULL;
 				}
 			}
 
@@ -225,6 +225,7 @@ void PepXMLClass::parsePepXMLfile() {
 			delete(mds);
 			mds = NULL;
 		}
+
 	}
 	in.close();
 
@@ -239,6 +240,7 @@ void PepXMLClass::parsePepXMLfile() {
 		cerr << "\nERROR!: I was unable to parse out any PSMs!!\nExiting now...\n";
 		exit(-1);
 	}
+
 
 	if(numPSMs_forModeling < g_MIN_MODEL_NUM) {
 		cerr << "\nERROR!: I was unable to find at least " << g_MIN_MODEL_NUM
@@ -642,6 +644,40 @@ void PepXMLClass::acquireModelParameters() {
 	}
 	cerr << setw(0);
 
+	/**************************************************************************
+	// Calculate the ideal m/z error window for matched peaks
+	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+		if( !curPSM->useForModeling() ) continue;
+		zN++;
+		TP.schedule( boost::bind(&PSMClass::threaded_recordModelingParameters_matched, boost::ref(*curPSM) ));
+	}
+	TP.wait(); // wait for all the threads to end
+
+	list<double> M_dist;
+	M_dist.clear();
+	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+
+		if( !curPSM->useForModeling() ) continue;
+
+		ptr = curPSM->getParamList('m', 'b', 'd');
+		for(L = ptr->begin(); L != ptr->end(); L++) M_dist.push_back(*L);
+
+		ptr = curPSM->getParamList('m', 'y', 'd');
+		for(L = ptr->begin(); L != ptr->end(); L++) M_dist.push_back(*L);
+
+		curPSM->clear();
+	}
+
+	double varM_dist  = getVar_muZero(&M_dist);
+	double sigma = sqrt(varM_dist);
+	g_MZ_ERR = sigma * 6.0;
+
+	cerr << "CID Estimated Fragment Ion Tolerance: " << g_MZ_ERR << " Da\n";
+
+	M_dist.clear();
+	/**************************************************************************/
+
+
 
 
 	for(curChargeState = 2; curChargeState <= maxChargeState; curChargeState++) {
@@ -695,7 +731,7 @@ void PepXMLClass::acquireModelParameters() {
 
 		if(zN >= g_MIN_MODEL_NUM) { // record modeling parameters only if you have data for the current charge state
 
-			if(g_DEBUG_MODE) {
+			if(g_DEBUG_MODE == 3) {
 
 				debug_modelData.open("modelData.debug", ios::out);
 				debug_modelData << "dataType\tvalue\n";
@@ -878,9 +914,45 @@ void PepXMLClass::acquireModelParameters_HCD() {
 	cerr << "\nAcquiring model parameters from " << numPSMs_forModeling << " spectra with Score >= "
 		 << g_model_prob << endl;
 
+	/******************************************************************************/
+//	// calculate the correct m/z err window for this data for the matched peaks
+//	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+//
+//		if( !curPSM->useForModeling() ) continue;
+//		zN++;
+//		TP.schedule( boost::bind(&PSMClass::threaded_recordModelingParameters_matched, boost::ref(*curPSM) ));
+//	}
+//	TP.wait(); // wait for all the threads to end
+//
+//	M_dist.clear();
+//	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
+//
+//			if( !curPSM->useForModeling() ) continue;
+//
+//			ptr = curPSM->getParamList('m', 'b', 'd');
+//			for(L = ptr->begin(); L != ptr->end(); L++) M_dist.push_back(*L);
+//
+//			ptr = curPSM->getParamList('m', 'y', 'd');
+//			for(L = ptr->begin(); L != ptr->end(); L++) M_dist.push_back(*L);
+//
+//			curPSM->clear();
+//	}
+//
+//
+//	//pruneList(&M_dist, 0.05);
+//	varM_dist  = getVar_muZero(&M_dist);
+//	double sigma = sqrt(varM_dist);
+//	g_MZ_ERR = sigma * 10.0;
+//
+//	cerr << "HCD Estimated Fragment Ion Tolerance: " << g_MZ_ERR << " Da\n";
+//
+//	M_dist.clear();
+//	varM_dist = 0;
+	/******************************************************************************/
+
+
 
 	zN = 0; // keep track of how many "modeling" PSMs you encounter
-
 	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
 
 		if( !curPSM->useForModeling() ) continue;
@@ -929,7 +1001,7 @@ void PepXMLClass::acquireModelParameters_HCD() {
 
 	if(zN >= g_MIN_MODEL_NUM) { // record modeling parameters only if you have data for the current charge state
 
-		if(g_DEBUG_MODE) {
+		if(g_DEBUG_MODE == 3) {
 			// Debug function that prints out the values used for modeling.
 			debug_modelData.open("modelData.debug", ios::out);
 			debug_modelData << "dataType\tvalue\n";
@@ -1015,7 +1087,7 @@ void PepXMLClass::acquireModelParameters_HCD() {
 
 	}
 
-	if(g_DEBUG_MODE) printDensity(curParams);
+	if(g_DEBUG_MODE == 5) printDensity(curParams);
 
 	delete(curParams); curParams = NULL;
 
@@ -1428,6 +1500,7 @@ void PepXMLClass::calcFLR() {
 		delete(curFLR); curFLR = NULL;
 	}
 
+
 	flr = new FLRClass(ptr, maxDeltaScore);
 	flr->evalTickMarks();
 	flr->calcBothFDRs();
@@ -1523,14 +1596,5 @@ void PepXMLClass::resetMZerr() {
 }
 
 
-//// Function just prints out the number of permutations a given PSM will have
-//void PepXMLClass::getCounts() {
-//	deque<PSMClass>::iterator curPSM;
-//
-//	cout << "specId\tpeptide\tpepLen\tnumSTY\tnumPhosphoSites\tnumPerm\tnumDecoys\n";
-//	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-//		cout << curPSM->countInfo();
-//	}
-//	exit(0);
-//}
+
 

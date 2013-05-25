@@ -38,7 +38,6 @@ bool g_userDefinedOutput = false;
 bool g_FULL_MONTY = false;
 bool g_IS_HCD = false;
 bool g_writeDTA = false;
-bool g_DEBUG_MODE = false;
 bool g_NO_NL_PEAKS = false;
 bool g_NO_NL_PEAKS_MODEL = false;
 bool g_NL_MODEL_ONLY = false;
@@ -54,6 +53,7 @@ bool g_SITE_LEVEL_SCORING = false;
 
 double MIN_MZ = 100.0; // lowest m/z value we'll consider
 double g_MZ_ERR = 0.5;
+double g_DECOY_MZ_ERR = 0.5;
 double g_prob_threshold = 0.05;
 double g_model_prob = 0.95;
 double g_NUM_PERMS_LIMIT = pow(2.0, 14); // maximum number of permutations to consider
@@ -66,6 +66,7 @@ int g_NUM_THREADS = 1;
 int g_intensityType = 2;
 int g_CHARGE_STATE = 0;
 int g_MIN_MODEL_NUM = 10;
+int g_DEBUG_MODE = 0;
 
 map<char, char> decoyAA;
 map<char, double> AAmass;
@@ -82,7 +83,7 @@ static const struct option longOpts[] = {
 		{ "hcd", no_argument, NULL, 0 },
 		{ "SDI", no_argument, NULL, 0 },
         { "ppm", no_argument, NULL, 0 },
-		{ "debug", no_argument, NULL, 0 },
+		{ "debug", required_argument, NULL, 0 },
 		{ "Sl", required_argument, NULL, 0 }
 };
 
@@ -134,7 +135,13 @@ void print_usage() {
 		 << "   --noDecoys                Do *NOT* estimate False Localization Rate (FLR) using decoy phosphorylation sites\n"
 		 << "   --SDI                     Use only fragment ions that distinguish between the top two permutations of a PSM when performing final scoring\n\n"
 
-		 << "   --debug                   Debug mode, for developers. Produces extra files to track down errors.\n"
+		 << "   --debug <123456>          Debug mode, for developers. Produces extra files to track down errors.\n"
+		 << "                             1 = Output the permutations and scores for each PSM (stdout)\n"
+		 << "                             2 = Output ionScores.debug file\n"
+		 << "                             3 = Output modelData.debug file (modeling parameter values)\n"
+		 << "                             4 = Output mzErrWinMatched.txt file\n"
+		 << "                             5 = Output Non-parametric model density estimation files\n"
+		 << "                             6 = Output Ascore peak_data.debug file\n"
 
 		 << endl;
 }
@@ -161,6 +168,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 
 	int nn = 0;
 	int c;
+	bool userGiven = false;
 
 	int longIndex;
 	while( (c = getopt_long(argc, argv, "m:p:x:i:w:d:e:T:t:o:n:Z:k:fcAbNS", longOpts, &longIndex)) != -1 ) {
@@ -229,6 +237,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 			break;
 		case 'w':
 			g_MZ_ERR = atof(optarg);
+			userGiven = true;
 			break;
 		case 'd':
 			g_srcDir = optarg;
@@ -262,7 +271,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 					g_useOnlySiteDetermIons = true;
 				}
 				if( strcmp("debug", longOpts[longIndex].name) == 0 ) {
-					g_DEBUG_MODE = true;
+					g_DEBUG_MODE = atoi(optarg);
 				}
 				if( strcmp("Sl", longOpts[longIndex].name) == 0 ) {
 					g_scoreSelect = true;
@@ -340,7 +349,7 @@ void parse_command_line_args(int argc, char *argv[]) {
 		g_NUM_THREADS = 1;
 	}
 
-	if(g_DEBUG_MODE) { // in order to write out debug files, we need to limit program to 1 thread
+	if(g_DEBUG_MODE > 0) { // in order to write out debug files, we need to limit program to 1 thread
 		g_NUM_THREADS = 1;
 	}
 
@@ -348,6 +357,14 @@ void parse_command_line_args(int argc, char *argv[]) {
 	if(g_IS_HCD) {
 		MIN_MZ = 100.0; // we can go pretty low in the m/z scale with HCD data
 		g_MIN_MODEL_NUM = 50; // since we don't separate based on charge state, we need to increase this
+
+		// if the user has not specified a default error tolerance use this.
+		// This value has worked well with our test data sets for HCD.
+		if(!userGiven) g_MZ_ERR = 0.1;
+
+		g_DECOY_MZ_ERR = g_MZ_ERR;
+		//g_DECOY_MZ_ERR = 4 * g_MZ_ERR; // decoys need a bigger error window
+
 	}
 
 	if( !g_userDefinedOutput ) {
@@ -397,6 +414,12 @@ void parse_command_line_args(int argc, char *argv[]) {
 		cerr << g_MZ_ERR;
 		if(g_usePPM) cerr << " PPM\n";
 		else cerr << " Da\n";
+
+//		if(g_IS_HCD) {
+//			cerr << "Decoy Fragment ion tolerance: " << g_DECOY_MZ_ERR;
+//			if(g_usePPM) cerr << " PPM\n";
+//			else cerr << " Da\n";
+//		}
 	}
 
 	cerr << "Output format: ";
@@ -457,7 +480,10 @@ void parse_command_line_args(int argc, char *argv[]) {
 	if(g_WRITE_TOP_TWO) cerr << "\tWriting matched peaks for BOTH predictions\n";
 
 
-	if(g_DEBUG_MODE) cerr << "\tRunning in debug mode (Limited to 1 thread)...\n";
+	if(g_DEBUG_MODE > 0) {
+		cerr << "\tRunning in debug mode (Limited to 1 thread)...\n";
+		cerr << "\tDebug output: " << g_DEBUG_MODE << endl;
+	}
 
 	cerr << "\n==============================================================\n";
 }
@@ -566,7 +592,7 @@ void addAAmass(string AA, double mass, char isVar) {
 			modAAmap[ ch ] = str; //example: q = Q[111]
 
 
-			if(g_DEBUG_MODE) cerr << "1. Added variable mod '" << ch << "': " << modAAmap[ ch ] << endl;
+			if(g_DEBUG_MODE > 0) cerr << "1. Added variable mod '" << ch << "': " << modAAmap[ ch ] << endl;
 		}
 		else {
 			// this is a new modification but the letter that represents it
@@ -586,10 +612,9 @@ void addAAmass(string AA, double mass, char isVar) {
 					massStr = "[" + int2string( (int) round_dbl(mass,0) ) + "]";
 					str += massStr;
 					modAAmap[ newCh ] = str;
+					if(g_DEBUG_MODE > 0) cerr << "2. Added variable mod '" << newCh << "': " << modAAmap[ newCh ] << endl;
 				}
 			}
-
-			if(g_DEBUG_MODE) cerr << "2. Added variable mod '" << ch << "': " << modAAmap[ ch ] << endl;
 		}
 	} // end if(isVar == 'Y')
 	else {

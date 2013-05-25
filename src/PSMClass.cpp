@@ -874,7 +874,12 @@ void PSMClass::calcScore() {
 
 	if(g_SITE_LEVEL_SCORING) calcSiteLevelScores(scoreDeq); // perform site-level scoring
 
-	pickScores(scoreDeq); // pick the best score and next-best score that is stored in scoreDeq
+
+	// pick the best score and next-best score that is stored in scoreDeq
+	pickScores(scoreDeq);
+
+
+	processTopHits(); // function extracts necessary stats about the top scoring hits for this PSM
 
 	scoreDeq.clear();
 	time(&end_t);
@@ -892,26 +897,139 @@ void PSMClass::calcScore() {
 
 
 
-// Function picks out the best score and the next-best score for the data
-// contained in the scoreStruct vector passed to it
+
+
+
+// Function picks the best socring permutations for this PSM
 void PSMClass::pickScores(deque<scoreStruct> &v) {
 	deque<scoreStruct>::iterator curScore;
-	list<double> score_list;
-	list<double>::iterator L_iter;
-	set<string> ions1, ions2; // for using only site determining ions
-	scoreStruct *bestScoreStruct = NULL;
-	scoreStruct *nextBestScoreStruct = NULL;
-	double best_score = 0.0;
-	double next_bestScore = 0.0;
-	double mz, intensity;
-	bool score1_set = false;
-	bool score2_set = false;
+
+	map<string, scoreStruct> ssObjMap;
+	map<string, scoreStruct>::iterator ss;
+	map<string, double> seq2scoreMap;
+	map<string, double>::iterator md;
+	list<double> scoreList;
+
+	double score1 = -1;
+	double score2 = -1;
+	double score = 0;
+	double deltaScore = 0;
+	string seq1, seq2;
+	string seq;
+
+
+	scoreList.clear();
+	for(curScore = v.begin(); curScore != v.end(); curScore++) {
+		score = curScore->score;
+		seq   = curScore->seq;
+
+		if(g_DEBUG_MODE == 1) {
+			cout << endl
+				 << specId << "\t"
+				 << seq << "\t(" << score << ")\t"
+				 << isDecoyPep(&seq);
+		}
+
+		scoreList.push_back(score);
+		ssObjMap[ seq ] = *curScore;
+		seq2scoreMap[ seq ] = score;
+	}
+
+	if(g_DEBUG_MODE == 1) cout << endl;
+
+
+
+	// Special case for handling unambiguous peptides
+	if(is_unambiguous) {
+		for(ss = ssObjMap.begin(); ss != ssObjMap.end(); ss++) {
+			seq = ss->first;
+			if( !isDecoyPep(&seq) ) {
+				bestScore_final = ss->second;
+				nextBestScore_final = ss->second;
+				nextBestScore_final.score = 0; // this guarantees that delta score will be large
+				deltaScore = bestScore_final.score - nextBestScore_final.score;
+
+				if(g_DEBUG_MODE == 1) {
+					cout << specId << "\t  "
+						 << bestScore_final.seq << "  (" << bestScore_final.score << ")\t"
+						 << nextBestScore_final.seq << "  (" << nextBestScore_final.score << ")\t"
+						 << "delta = " << deltaScore << endl;
+				}
+				return;
+			}
+		}
+	}
+
+
+
+	scoreList.sort(); //sorted from low to high
+	score1 = scoreList.back(); // get the top score
+	scoreList.pop_back();
+	score2 = scoreList.back(); // get 2nd best score
+
+
+	// find a sequence for score1
+	seq1.clear();
+	for(md = seq2scoreMap.begin(); md != seq2scoreMap.end(); md++) {
+		seq = md->first;
+		score = md->second;
+
+		if(score == score1) { // found a permutation with the top score
+			seq1 = seq;
+			seq2scoreMap.erase(seq); // remove this permutation from the map so it's not "picked up" again
+		}
+
+		if( !seq1.empty() ) break; // leave loop once seq1 has been assigned a sequence
+	}
+
+
+	// find a sequence for score2
+	seq2.clear();
+	for(md = seq2scoreMap.begin(); md != seq2scoreMap.end(); md++) {
+		seq = md->first;
+		score = md->second;
+
+		if(score == score2) { // found a permutation with the 2nd best score
+			seq2 = seq;
+		}
+
+		if( !seq2.empty() ) break; // leave loop once seq2 has been assigned a sequence
+	}
+
+
+	bestScore_final = ssObjMap[ seq1 ];
+	nextBestScore_final = ssObjMap[ seq2 ];
+	deltaScore = bestScore_final.score - nextBestScore_final.score;
+
+	if(g_DEBUG_MODE == 1) {
+		cout << specId << "\t  "
+			 << bestScore_final.seq << "  (" << bestScore_final.score << ")\t"
+			 << nextBestScore_final.seq << "  (" << nextBestScore_final.score << ")\t"
+			 << "delta = " << deltaScore << endl;
+	}
+
+}
+
+
+
+
+
+// After the top 2 predictions for this PSM have been selected based upon their
+// log-likelihood scores, this function records the delta score and the
+// spectral features of each preduction for output (should they be needed.
+void PSMClass::processTopHits() {
 
 	MSProductClass *bestMatch = NULL;
+	set<string> ions1, ions2; // for using only site determining ions
 	map<double, peakStruct> *Mptr = NULL;
 	map<double, double> *spectrum = NULL;
 	map<double, vector<double> >::iterator curPeak;
+	double mz, intensity;
 
+
+	if(g_useOnlySiteDetermIons) {
+		getSiteDeterminingIons(bestScore_final.seq, nextBestScore_final.seq, ions1, ions2);
+	}
 
 	// store the relevant peak type into a new map that is passed to the curMSProduct object
 	spectrum = new map<double, double>;
@@ -919,67 +1037,6 @@ void PSMClass::pickScores(deque<scoreStruct> &v) {
 		mz = curPeak->first;
 		intensity = curPeak->second.at(peakType);
 		spectrum->insert( pair<double, double>(mz, intensity) );
-	}
-
-	// prep for assignment
-	bestScoreStruct = new scoreStruct();
-	nextBestScoreStruct = new scoreStruct();
-
-	// put all the scores into a list
-	score_list.clear();
-	for(curScore = v.begin(); curScore != v.end(); curScore++) {
-		score_list.push_back(curScore->score);
-	}
-	score_list.unique();
-	score_list.sort();
-	score_list.reverse();
-
-
-	if((signed)score_list.size() == 1) {
-		// This means all permutations had the same score.
-		// In this case, we will take the first two scores off the list
-		*bestScoreStruct = v.at(0);
-
-		if((signed) v.size() > 1) *nextBestScoreStruct = v.at(1);
-		else *nextBestScoreStruct = v.at(0);
-	}
-	else { // you had at least 2 distinct scores for this PSM
-		L_iter = score_list.begin();
-		best_score = *L_iter;
-
-		L_iter++;
-		next_bestScore = *L_iter;
-
-		for(curScore = v.begin(); curScore != v.end(); curScore++) {
-			if( (curScore->score == best_score) && (score1_set == false) ) {
-				*bestScoreStruct = *curScore;
-				score1_set = true;
-			}
-			if( (curScore->score == next_bestScore) && (score2_set == false) ) {
-				*nextBestScoreStruct = *curScore;
-				score2_set = true;
-			}
-
-			// this only happens *AFTER* both variables have been assigned a value
-			if( score1_set && score2_set ) break;
-		}
-	}
-
-	score_list.clear(); // cleanup
-
-
-	// One of the methods above should have produced a bestScore and a 2nd bestScore
-	// now record them into the PSMClass variables
-	bestScore_final = *bestScoreStruct;
-	nextBestScore_final = *nextBestScoreStruct;
-
-	delete(bestScoreStruct); bestScoreStruct = NULL;
-	delete(nextBestScoreStruct); nextBestScoreStruct = NULL;
-
-
-
-	if(g_useOnlySiteDetermIons) {
-		getSiteDeterminingIons(bestScore_final.seq, nextBestScore_final.seq, ions1, ions2);
 	}
 
 
@@ -1028,7 +1085,9 @@ void PSMClass::pickScores(deque<scoreStruct> &v) {
 
 	// compute and record the Luciphor delta score
 	luciphor_deltaScore = bestScore_final.score - nextBestScore_final.score;
+
 }
+
 
 
 
@@ -1137,19 +1196,16 @@ void PSMClass::calcSiteLevelScores(deque<scoreStruct> &scoreDeq) {
 void PSMClass::write_results(ofstream &outf) {
 
 		int isDecoy1 = 0, isDecoy2 = 0;
-		double delta_score = 0;
 		int N = (signed) raw_spectrum.size();
 
 
-		delta_score = bestScore_final.score - nextBestScore_final.score;
-
-		// If this PSM represents a peptide where all potential sites are
-		// phosphorylated then we set the delta_score to be the best score.
-		// We reset 'nextBestScore_final.score' to be zero.
-		if(is_unambiguous && (g_randDecoyAA == false)) {
-			delta_score = bestScore_final.score;
-			nextBestScore_final.score = 0;
-		}
+//		// If this PSM represents a peptide where all potential sites are
+//		// phosphorylated then we set the delta_score to be the best score.
+//		// We reset 'nextBestScore_final.score' to be zero.
+//		if(is_unambiguous && (g_randDecoyAA == false)) {
+//			delta_score = bestScore_final.score;
+//			nextBestScore_final.score = 0;
+//		}
 
 		if( isDecoyPep( &bestScore_final.seq ) ) isDecoy1 = 1;
 		if( isDecoyPep( &nextBestScore_final.seq ) ) isDecoy2 = 1;
@@ -1174,7 +1230,7 @@ void PSMClass::write_results(ofstream &outf) {
 					 << globalFLR << "\t";
 			}
 
-			outf << delta_score << "\t"
+			outf << luciphor_deltaScore << "\t"
 				 << bestScore_final.score << "\t"
 				 << nextBestScore_final.score << "\t"
 				 << isDecoy1 << "\t"
@@ -1193,7 +1249,7 @@ void PSMClass::write_results(ofstream &outf) {
 				 << numPhosphoSites << "\t"
 				 << numPotentialSites << "\t"
 				 << bestScore_final.seq << "\t"
-				 << delta_score << "\t"
+				 << luciphor_deltaScore << "\t"
 				 << round_dbl(maxSiteLevelScore, 4) << "\t";
 
 			N = (signed) siteLevelScoreMap.size();
@@ -1222,7 +1278,7 @@ void PSMClass::write_results(ofstream &outf) {
 					 << globalFLR << "\t";
 			}
 
-			outf << delta_score << "\t"
+			outf << luciphor_deltaScore << "\t"
 				 << bestScore_final.score << "\t"
 				 << nextBestScore_final.score << "\t"
 				 << isDecoy1 << "\t"
@@ -1305,7 +1361,7 @@ void PSMClass::runAscore() {
 	list<double> L, L2;
 
 
-	if(g_DEBUG_MODE) {
+	if(g_DEBUG_MODE == 6) {
 		// open the debug file for writing and generate the header line
 		if( !fileExists("ascore_peak_data.debug") ) {
 			ascoreDebugF.open("ascore_peak_data.debug", ios::out);
@@ -1435,7 +1491,7 @@ void PSMClass::runAscore() {
 
 
 	// for debugging print out the peptide scores for all permutations at every peak depth
-	if(g_DEBUG_MODE) {
+	if(g_DEBUG_MODE == 6) {
 		for(smIter = scoreMap.begin(); smIter != scoreMap.end(); smIter++) {
 			ascoreDebugF << specId << "\t" << smIter->first << "\t";
 			for(int i = 0; i < 10; i++) {
@@ -1720,11 +1776,13 @@ double PSMClass::getNumPerms() {
 // Function records all of the necessary data for computing the FLR
 // for this PSM into the passed struct
 flrStruct PSMClass::getFLRdata() {
-	double deltaScore = bestScore_final.score - nextBestScore_final.score;
+	//double deltaScore = bestScore_final.score - nextBestScore_final.score;
 	flrStruct ret;
 
 	ret.specId = specId;
-	ret.deltaScore = deltaScore;
+	//ret.deltaScore = deltaScore;
+	ret.deltaScore = luciphor_deltaScore;
+
 	ret.isDecoy = isDecoyPep( &bestScore_final.seq );
 	ret.globalFLR = 1;
 	ret.localFLR = 1;
@@ -1753,7 +1811,7 @@ void PSMClass::clear() {
 	M_dist_b.clear();
 	U_ints_local.clear();
 	U_dist_local.clear();
-	mz_err = 0;
+	//mz_err = 0;
 
 }
 

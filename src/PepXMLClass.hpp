@@ -51,7 +51,6 @@ private:
 	map<int, double> mzErrMap; // k = charge, v = calculated mz_err tolerance
 
 
-
 public:
 	void parsePepXMLfile();
 	void readInSpectra();

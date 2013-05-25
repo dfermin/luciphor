@@ -121,6 +121,7 @@ public:
 	void calcNumDecoyPermutations();
 
 	void pickScores(deque<scoreStruct> &v);
+	void processTopHits();
 	void calcSiteLevelScores(deque<scoreStruct> &scoreDeq);
 	void updateSpectrumMap(map<double, double> newSpec, string whichMap);
 	void setSpectrumPtr(string whichMap);

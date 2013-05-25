@@ -58,8 +58,6 @@ public:
 	void setMinorMaps();
 	void performMinorization();
 	void assignFDRvalues();
-	void fart();
-
 
 };
 
