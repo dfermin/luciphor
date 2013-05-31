@@ -40,6 +40,8 @@ private:
 	double maxDeltaScore;
 	int Nreal;
 	int Ndecoy;
+	double Nreal2;
+	double Ndecoy2;
 	double bw_real;
 	double bw_decoy;
 

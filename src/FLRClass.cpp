@@ -30,17 +30,26 @@ FLRClass::FLRClass(deque<flrStruct> *ptr, double d) {
 	maxDeltaScore = 0;
 	Nreal = 0;
 	Ndecoy = 0;
+	Nreal2 = 0;
+	Ndecoy2 = 0;
 	bw_real = 0;
 	bw_decoy = 0;
+
+
 
 	allPSMs = *ptr;
 	maxDeltaScore = d * 1.001; // need maxDeltaScore to be slightly larger for binning;
 
 	deque<flrStruct>::iterator iter;
 	for(iter = allPSMs.begin(); iter != allPSMs.end(); iter++) {
-		if(iter->deltaScore > 0.5) { 
+		if(iter->deltaScore > 0.1) { 
 			if(iter->isDecoy) decoyDeq.push_back( *iter );
 			else realDeq.push_back( *iter );
+		}
+
+		if(iter->deltaScore > 0.1) {
+			if(iter->isDecoy) Ndecoy2++;
+			else Nreal2++;
 		}
 	}
 
@@ -203,7 +212,8 @@ void FLRClass::calcBothFDRs() {
 		AUC_rev_0 = getLocalAUC(tmp_score, 0);
 		AUC_rev_1 = getLocalAUC(tmp_score, 1);
 
-		ratio = ( ((double)Ndecoy) / ((double)Nreal) ) * ( AUC_rev_0 / AUC_rev_1 );
+		//ratio = ( ((double)Ndecoy) / ((double)Nreal) ) * ( AUC_rev_0 / AUC_rev_1 );
+		ratio = ( Ndecoy2 / Nreal2 ) * ( AUC_rev_0 / AUC_rev_1 );
 		localFDR.at( i ) = ratio;
 
 
@@ -212,7 +222,8 @@ void FLRClass::calcBothFDRs() {
 		AUC_rev_0 = getGlobalAUC(tmp_score, 0);
 		AUC_rev_1 = getGlobalAUC(tmp_score, 1);
 
-		ratio = ( ((double)Ndecoy) / ((double)Nreal) ) * ( AUC_rev_0 / AUC_rev_1 );
+		//ratio = ( ((double)Ndecoy) / ((double)Nreal) ) * ( AUC_rev_0 / AUC_rev_1 );
+		ratio = ( Ndecoy2 / Nreal2 ) * ( AUC_rev_0 / AUC_rev_1 );
 		globalFDR.at( i ) = ratio;
 		i++;
 	}

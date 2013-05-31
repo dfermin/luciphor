@@ -277,15 +277,21 @@ void PepXMLClass::readInSpectra() {
 		curScanId->scanNumber = curPSM->getScanNumber();
 		curScanId->specId = curPSM->getSpecId();
 
-		scanMap[ curScanId->spectrumFile ].push_back(*curScanId);
+		if( boost::filesystem::exists(curScanId->spectrumFile) ) {
+			scanMap[ curScanId->spectrumFile ].push_back(*curScanId);
+		}
+		else {
+			curPSM = PSMvec->erase(curPSM);
+		}
+
 		delete(curScanId);
 		curScanId = NULL;
 	}
 
-	if(g_ext == "mgf") {
-		parseMGF();
-		return;
-	}
+//	if(g_ext == "mgf") {
+//		parseMGF();
+//		return;
+//	}
 
 
 	// iterate over each file name extracting the relevant spectra from it
@@ -328,12 +334,22 @@ void PepXMLClass::readInSpectra() {
 	}
 
 	// assign the data in spectraLib to each of the PSMClass objects in PSMvec
+	int dropped = 0;
 	map<string, SpecStruct>::iterator curSS;
 	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
 		curSS = spectraLib.find( curPSM->getSpecId() );
-		curPSM->recordSpectrum( curSS->second );
+
+		if(curSS != spectraLib.end()) curPSM->recordSpectrum( curSS->second );
+		else { dropped++; }
 	}
 	spectraLib.clear(); // clean up
+
+	// This reports how many PSMs were lost because we weren't able to extract their spectra
+	if(dropped > 0) {
+		cerr << endl << dropped
+			 << " PSMs were discarded. I was unable to extract their spectra."
+			 << endl;
+	}
 
 	cerr << endl; // prettier stderr
 }
@@ -914,43 +930,6 @@ void PepXMLClass::acquireModelParameters_HCD() {
 	cerr << "\nAcquiring model parameters from " << numPSMs_forModeling << " spectra with Score >= "
 		 << g_model_prob << endl;
 
-	/******************************************************************************/
-//	// calculate the correct m/z err window for this data for the matched peaks
-//	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-//
-//		if( !curPSM->useForModeling() ) continue;
-//		zN++;
-//		TP.schedule( boost::bind(&PSMClass::threaded_recordModelingParameters_matched, boost::ref(*curPSM) ));
-//	}
-//	TP.wait(); // wait for all the threads to end
-//
-//	M_dist.clear();
-//	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-//
-//			if( !curPSM->useForModeling() ) continue;
-//
-//			ptr = curPSM->getParamList('m', 'b', 'd');
-//			for(L = ptr->begin(); L != ptr->end(); L++) M_dist.push_back(*L);
-//
-//			ptr = curPSM->getParamList('m', 'y', 'd');
-//			for(L = ptr->begin(); L != ptr->end(); L++) M_dist.push_back(*L);
-//
-//			curPSM->clear();
-//	}
-//
-//
-//	//pruneList(&M_dist, 0.05);
-//	varM_dist  = getVar_muZero(&M_dist);
-//	double sigma = sqrt(varM_dist);
-//	g_MZ_ERR = sigma * 10.0;
-//
-//	cerr << "HCD Estimated Fragment Ion Tolerance: " << g_MZ_ERR << " Da\n";
-//
-//	M_dist.clear();
-//	varM_dist = 0;
-	/******************************************************************************/
-
-
 
 	zN = 0; // keep track of how many "modeling" PSMs you encounter
 	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
@@ -1032,20 +1011,20 @@ void PepXMLClass::acquireModelParameters_HCD() {
 		cerr << "\n# PSM: " << zN << " with Score >= " << g_model_prob << endl;
 
 
-		cerr << "Distance Matched  (mode, stdev):   (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl
-			 << "Intensity Matched (mean, stdev):   (" <<  meanM_ints << ", " << sqrt(varM_ints) << "); N = " << M_ints.size() << endl
-			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl;
+//		cerr << "Distance Matched  (mode, stdev):   (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl
+//			 << "Intensity Matched (mean, stdev):   (" <<  meanM_ints << ", " << sqrt(varM_ints) << "); N = " << M_ints.size() << endl
+//			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl;
 
 
 		//cerr << "Distance Unmatched (mean, stdev):  (" << meanU_dist << ", " << sqrt(varU_dist) << "); N = " << U_dist.size() << endl;
 
 
-		logF << endl
-			 << "# PSM: " << zN << " with Score >= " << g_model_prob << endl
-			 << "Intensity Matched (mean, stdev): (" <<  meanM_ints << ", " << sqrt(varM_ints) << "); N = " << M_ints.size() << endl
-			 << "Distance Matched  (mean, stdev): (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl
-			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl;
-			 //<< "Distance Unmatched (mean, stdev):  (" << meanU_dist << ", " << sqrt(varU_dist) << "); N = " << U_dist.size() << endl;
+//		logF << endl
+//			 << "# PSM: " << zN << " with Score >= " << g_model_prob << endl
+//			 << "Intensity Matched (mean, stdev): (" <<  meanM_ints << ", " << sqrt(varM_ints) << "); N = " << M_ints.size() << endl
+//			 << "Distance Matched  (mean, stdev): (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl
+//			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl;
+//			 //<< "Distance Unmatched (mean, stdev):  (" << meanU_dist << ", " << sqrt(varU_dist) << "); N = " << U_dist.size() << endl;
 
 
 		curParams = new modelParamStruct();
