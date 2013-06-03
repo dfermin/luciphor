@@ -67,8 +67,8 @@ public:
 	void getMatchedPeaks(map<double, peakStruct> *Mptr);
 
 	void getUnmatchedPeaks(map<double, double> *srcMapPtr, map<double, peakStruct> *Mptr, map<double, peakStruct> *Uptr);
-	double calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelParamStruct *paramPtr);
-	double calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, modelParamStruct *paramPtr);
+	double calcSpectrumScore(map<double, peakStruct> *Mpeaks);
+	double calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks);
 
 	void percentilePeaks(double alpha);
 	bool assignSpectrumMap(map<double, double> src);
@@ -93,7 +93,7 @@ public:
 	}
 
 	map<string, vector<double> > get_NL_peaks();
-	scoreStruct scorePermutation(modelParamStruct *paramPtr, string specId);
+	scoreStruct scorePermutation();
 };
 
 

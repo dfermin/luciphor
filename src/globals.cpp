@@ -72,6 +72,9 @@ map<char, char> decoyAA;
 map<char, double> AAmass;
 map<char, string> modAAmap;
 
+map<int, modelParamStruct> g_modelParamsMap_CID;
+modelParamStruct g_modelParams_HCD;
+
 
 // List long ( double dashed  ) command line options here
 // For tutorial see: http://www.ibm.com/developerworks/aix/library/au-unix-getopt.html

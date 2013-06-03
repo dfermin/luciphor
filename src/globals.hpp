@@ -16,6 +16,8 @@
 #include <set>
 #include <list>
 
+#include "structs.hpp"
+
 using namespace std;
 
 
@@ -71,6 +73,9 @@ extern int g_MIN_MODEL_NUM; // minimum number of PSMs you need for modeling
 extern map<char, string> modAAmap;
 extern map<char, char> decoyAA;
 extern set<string> g_PSMscoreSet; //set of PSMs the user wants scored
+
+extern map<int, modelParamStruct> g_modelParamsMap_CID;
+extern modelParamStruct g_modelParams_HCD;
 
 
 // Global constants

@@ -87,7 +87,6 @@ private:
 	map<double, peakStruct> ascoreMatchedSpectrum1, ascoreMatchedSpectrum2;
 	matchedSpectrumStruct bestSpectrum, nextBestSpectrum;
 	scoreStruct bestScore_final, nextBestScore_final;
-	modelParamStruct local_params;
 
 public:
 
@@ -144,7 +143,6 @@ public:
 	double getMass() { return mass; }
 	double getDeltaScore() { return luciphor_deltaScore; }
 	double getMaxIntensity() { return max_intensity; }
-	void setParamStruct( modelParamStruct *paramPtr ) { local_params = *paramPtr; }
 	void setNSS(int x) { numSupportingSpectra = x; }
 	void updateMZerr( double new_mz ) { mz_err = new_mz; }
 	int getCharge() { return charge; }
@@ -163,9 +161,7 @@ public:
 	list<double> getDistances(char x, char ionType);
 	list<double> getPeaks(int whichType);
 	list<double>* getParamList(char matchType, char ionType, char dataType);
-	//list<double> getParamList(char matchType, char ionType, char dataType);
 
-	void debug_printStats();
 };
 
 

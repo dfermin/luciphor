@@ -860,7 +860,7 @@ void PSMClass::calcScore() {
 			}
 
 			curScore = new scoreStruct();
-			*curScore = curMSProduct->scorePermutation(&local_params, specId);
+			*curScore = curMSProduct->scorePermutation();
 
 			scoreDeq.push_back( *curScore );
 
@@ -1198,14 +1198,6 @@ void PSMClass::write_results(ofstream &outf) {
 		int isDecoy1 = 0, isDecoy2 = 0;
 		int N = (signed) raw_spectrum.size();
 
-
-//		// If this PSM represents a peptide where all potential sites are
-//		// phosphorylated then we set the delta_score to be the best score.
-//		// We reset 'nextBestScore_final.score' to be zero.
-//		if(is_unambiguous && (g_randDecoyAA == false)) {
-//			delta_score = bestScore_final.score;
-//			nextBestScore_final.score = 0;
-//		}
 
 		if( isDecoyPep( &bestScore_final.seq ) ) isDecoy1 = 1;
 		if( isDecoyPep( &nextBestScore_final.seq ) ) isDecoy2 = 1;
@@ -1574,6 +1566,11 @@ void PSMClass::recordBestSpectrumScores(int J) {
 
 	map<double, peakStruct>::iterator curPeak;
 	matchedSpectrumStruct *ptr = NULL;
+
+	modelParamStruct local_params;
+
+	if(g_IS_HCD) local_params = g_modelParams_HCD;
+	else local_params = g_modelParamsMap_CID[ charge ];
 
 	// determine which permutation will be printed: best or 2nd best
 	if(J == 1) ptr = &bestSpectrum;

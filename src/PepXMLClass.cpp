@@ -609,6 +609,7 @@ void PepXMLClass::acquireModelParameters() {
 
 	modelParamStruct *curParams = NULL;
 
+	g_modelParamsMap_CID.clear();
 
 	double meanM_b, meanM_y, varM_b, varM_y, meanU, varU;
 	double meanMd_b, meanMd_y, varMd_b, varMd_y, meanUd, varUd;
@@ -659,41 +660,6 @@ void PepXMLClass::acquireModelParameters() {
 		cerr << cfm_iter->second << " PSMs for modeling.\n";
 	}
 	cerr << setw(0);
-
-	/**************************************************************************
-	// Calculate the ideal m/z error window for matched peaks
-	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-		if( !curPSM->useForModeling() ) continue;
-		zN++;
-		TP.schedule( boost::bind(&PSMClass::threaded_recordModelingParameters_matched, boost::ref(*curPSM) ));
-	}
-	TP.wait(); // wait for all the threads to end
-
-	list<double> M_dist;
-	M_dist.clear();
-	for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-
-		if( !curPSM->useForModeling() ) continue;
-
-		ptr = curPSM->getParamList('m', 'b', 'd');
-		for(L = ptr->begin(); L != ptr->end(); L++) M_dist.push_back(*L);
-
-		ptr = curPSM->getParamList('m', 'y', 'd');
-		for(L = ptr->begin(); L != ptr->end(); L++) M_dist.push_back(*L);
-
-		curPSM->clear();
-	}
-
-	double varM_dist  = getVar_muZero(&M_dist);
-	double sigma = sqrt(varM_dist);
-	g_MZ_ERR = sigma * 6.0;
-
-	cerr << "CID Estimated Fragment Ion Tolerance: " << g_MZ_ERR << " Da\n";
-
-	M_dist.clear();
-	/**************************************************************************/
-
-
 
 
 	for(curChargeState = 2; curChargeState <= maxChargeState; curChargeState++) {
@@ -834,14 +800,10 @@ void PepXMLClass::acquireModelParameters() {
 			curParams->unMatched_dist_var = varUd;
 
 
-			// record modeling parameters into each PSM
-			for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-				if(curPSM->getCharge() != curChargeState) continue;
-				curPSM->setParamStruct(curParams);
-			}
+			// record modeling parameters for this charge state
 
-			// record modeling parameters into modelParametersMap for this pepXMLClass object
-			modelParametersMap[ curChargeState ] = *curParams;
+			g_modelParamsMap_CID[ curChargeState ] = *curParams;
+
 		}
 		else {
 			missedChargeStates.insert(curChargeState);
@@ -869,16 +831,11 @@ void PepXMLClass::acquireModelParameters() {
 		for(s_iter = missedChargeStates.begin(); s_iter != missedChargeStates.end(); s_iter++) {
 
 			for(int Z = (*s_iter - 1); Z >= 2; Z--) {
-				m = modelParametersMap.find( Z );
+				m = g_modelParamsMap_CID.find( Z );
+				//m = modelParametersMap.find( Z );
 
 				if(m != modelParametersMap.end()) { // you found the nearest modeled charge state
-					curParams = new modelParamStruct();
-					*curParams = m->second;
-
-					for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) {
-						if(curPSM->getCharge() == *s_iter) curPSM->setParamStruct( curParams );
-					}
-					delete(curParams); curParams = NULL;
+					g_modelParamsMap_CID[ *s_iter ] = m->second;
 
 					cerr << "+" << *s_iter << " PSMs will be scored using parameters from "
 						 << "+" << Z << " PSMs\n";
@@ -886,11 +843,8 @@ void PepXMLClass::acquireModelParameters() {
 				}
 			}
 		}
-
 	}
 	cerr << endl; // prettier output
-
-
 }
 
 
@@ -978,7 +932,7 @@ void PepXMLClass::acquireModelParameters_HCD() {
 
 
 
-	if(zN >= g_MIN_MODEL_NUM) { // record modeling parameters only if you have data for the current charge state
+	if(zN >= g_MIN_MODEL_NUM) { // record modeling parameters only if you have data
 
 		if(g_DEBUG_MODE == 3) {
 			// Debug function that prints out the values used for modeling.
@@ -1009,23 +963,6 @@ void PepXMLClass::acquireModelParameters_HCD() {
 		double varU_dist  = getVar(&U_dist);
 
 		cerr << "\n# PSM: " << zN << " with Score >= " << g_model_prob << endl;
-
-
-//		cerr << "Distance Matched  (mode, stdev):   (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl
-//			 << "Intensity Matched (mean, stdev):   (" <<  meanM_ints << ", " << sqrt(varM_ints) << "); N = " << M_ints.size() << endl
-//			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl;
-
-
-		//cerr << "Distance Unmatched (mean, stdev):  (" << meanU_dist << ", " << sqrt(varU_dist) << "); N = " << U_dist.size() << endl;
-
-
-//		logF << endl
-//			 << "# PSM: " << zN << " with Score >= " << g_model_prob << endl
-//			 << "Intensity Matched (mean, stdev): (" <<  meanM_ints << ", " << sqrt(varM_ints) << "); N = " << M_ints.size() << endl
-//			 << "Distance Matched  (mean, stdev): (" <<  meanM_dist << ", " << sqrt(varM_dist) << "); N = " << M_dist.size() << endl
-//			 << "Intensity Unmatched (mean, stdev): (" << meanU_ints << ", " << sqrt(varU_ints) << "); N = " << U_ints.size() << endl;
-//			 //<< "Distance Unmatched (mean, stdev):  (" << meanU_dist << ", " << sqrt(varU_dist) << "); N = " << U_dist.size() << endl;
-
 
 		curParams = new modelParamStruct();
 		curParams->matched_mean_b = meanM_ints;
@@ -1060,9 +997,7 @@ void PepXMLClass::acquireModelParameters_HCD() {
 		 * End nonparametric code
 		**********************************************************************/
 
-
-		// record modeling parameters into each PSM
-		for(curPSM = PSMvec->begin(); curPSM != PSMvec->end(); curPSM++) curPSM->setParamStruct(curParams);
+		g_modelParams_HCD = *curParams; // record modeling parameters
 
 	}
 

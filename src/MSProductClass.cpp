@@ -675,7 +675,7 @@ void MSProductClass::assignFragmentIonsMZ(list<double> &ret) {
 
 // Function extracts the top N peaks from the spectrum and scores them using the
 // parameters previously computed. We use the BOOST BIMAP to go between m/z and intensity values
-scoreStruct MSProductClass::scorePermutation(modelParamStruct *paramPtr, string specId) {
+scoreStruct MSProductClass::scorePermutation() {
 
 	double mz, intensity;
 	double score;
@@ -692,13 +692,13 @@ scoreStruct MSProductClass::scorePermutation(modelParamStruct *paramPtr, string 
 		exit(-1);
 	}
 
-	// Now identify which peaks can be matched to theoretical peaks
+	// Now identify which observed peaks can be matched to theoretical peaks
 	M.clear(); // matched peaks
 	getMatchedPeaks(&M);
 
 	score = 0.0;
-	if(g_IS_HCD) score = calcSpectrumScore_HCD(&M, paramPtr);
-	else score = calcSpectrumScore(&M, paramPtr);
+	if(g_IS_HCD) score = calcSpectrumScore_HCD(&M);
+	else score = calcSpectrumScore(&M);
 
 	curScore = new scoreStruct();
 	curScore->topNpeaksConsidered = i;
@@ -719,7 +719,6 @@ scoreStruct MSProductClass::scorePermutation(modelParamStruct *paramPtr, string 
 
 	return retScore;
 }
-
 
 
 
@@ -770,7 +769,6 @@ void MSProductClass::getUnmatchedPeaks(map<double, double> *srcMapPtr, map<doubl
 			peakPtr = new peakStruct;
 			peakPtr->intensity = intensity;
 			tmpDist = D.back();
-			// peakPtr->MZdistance = mz_adjust_dist( D.back() );
 			peakPtr->MZdistance = ( D.back() );
 			peakPtr->ionType = 'u';
 			Uptr->insert(pair<double, peakStruct>(mz, *peakPtr));
@@ -783,7 +781,7 @@ void MSProductClass::getUnmatchedPeaks(map<double, double> *srcMapPtr, map<doubl
 
 
 // function actually does the scoring of the map pointed to by specPtr
-double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelParamStruct *paramPtr) {
+double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks) {
 	map<double, peakStruct>::iterator curPeak;
 	double muM, muU, varM, varU, muM_dist, varM_dist, muU_dist, varU_dist;
 	double mz, intensity, log_prob_M, log_prob_U;
@@ -795,6 +793,10 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 	char peakType; // b, y
 	string ionSeq, ss;
 	size_t found;
+
+	modelParamStruct *paramPtr = new modelParamStruct;
+	*paramPtr = g_modelParamsMap_CID[ charge ];
+
 
 	// variables for unmatched peaks
 	muU = paramPtr->unMatched_mean;
@@ -918,6 +920,8 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 
 	if(g_DEBUG_MODE == 2) debug_ionScores.close();
 
+	delete(paramPtr); paramPtr = NULL;
+
 	return score;
 }
 
@@ -927,7 +931,8 @@ double MSProductClass::calcSpectrumScore(map<double, peakStruct> *Mpeaks, modelP
 // function actually does the scoring of the map pointed to by specPtr
 // This function is specifically for HCD data which has a different distribution
 // from CID data.
-double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, modelParamStruct *paramPtr) {
+double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks) {
+
 	map<double, peakStruct>::iterator curPeak;
 
 	// intensity variables
@@ -945,6 +950,8 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks, mo
 	bool isNLpeak;
 	char peakType; // b, y
 	string ionSeq, ss;
+
+	 modelParamStruct *paramPtr = &g_modelParams_HCD;
 
 
 	if(g_DEBUG_MODE == 2) {
