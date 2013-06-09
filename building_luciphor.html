@@ -56,14 +56,18 @@ are generally applicable to those distributions.
 	</li>
 	
 	<li>
-		Unpack and compile the Proteowizard library. The following commands should be
-		executed in order from within the dfermin-luciphor-&lt;d0f3388&gt;<br/>
+		Unpack and prep the Proteowizard library for compilation. The following commands should be
+		executed in order from <i>within</i> the dfermin-luciphor-&lt;d0f3388&gt;<br/>
 		<div id="code">
 		mkdir pwiz_root<br/>
 		mv pwiz-src-without*.bz2 pwiz_root/<br/>
+		mv boost_1_43_0.tar.bz2 pwiz_root/<br/>
 		cd pwiz_root<br/>
 		tar xjf pwiz_src_without*.bz2<br/>
+		tar xjf boost_1_43_0.tar.bz2<br/>
 		</div>
+	</li>
+	<li>
 		Now we will compile Proteowizard.
 		<span id="warning"><i>WARNING: This will take a long time so be patient!</i></span><br/>
 		Within the pwiz_root folder, type:<br/>
@@ -100,7 +104,7 @@ are generally applicable to those distributions.
 	</li>
 </ol>
 <br/>
-If you have questions or problems please post to our discussion forum at:
+If you have questions or problems please post to our discussion forum at:<br/>
 <span id="code2">luciphor-support@googlegroups.com</span>
 <br/>
 </div>
