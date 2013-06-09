@@ -941,7 +941,7 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks) {
 	// distance variables
 	double muM_dist, varM_dist, varM_dist_IQR, log_dist_M, log_dist_U;
 
-	double muU_dist, varU_dist;
+//	double muU_dist, varU_dist;
 
 	double mz, intensity, mzDist, score, Iscore, Dscore, x;
 
@@ -988,8 +988,8 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks) {
 		// so assign them here
 		muU_ints = paramPtr->unMatched_mean;
 		varU_ints = paramPtr->unMatched_var;
-		muU_dist = paramPtr->unMatched_dist_mean;
-		varU_dist = paramPtr->unMatched_dist_var;
+//		muU_dist = paramPtr->unMatched_dist_mean;
+//		varU_dist = paramPtr->unMatched_dist_var;
 
 
 		score = 0.0;
@@ -1029,7 +1029,8 @@ double MSProductClass::calcSpectrumScore_HCD(map<double, peakStruct> *Mpeaks) {
 			 * DISTANCE
 			 */
 			log_dist_M = getLogNPdensityDist(mzDist, paramPtr);
-			log_dist_U = getLogNPdensityDist_U(mzDist, paramPtr);
+//			log_dist_U = getLogNPdensityDist_U(mzDist, paramPtr); // what we had 2013 June 6
+			log_dist_U = 0; // log of Uniform distribution between -1 to 1 is zero
 
 			Dscore = log_dist_M - log_dist_U;
 

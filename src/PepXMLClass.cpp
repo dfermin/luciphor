@@ -801,7 +801,6 @@ void PepXMLClass::acquireModelParameters() {
 
 
 			// record modeling parameters for this charge state
-
 			g_modelParamsMap_CID[ curChargeState ] = *curParams;
 
 		}
@@ -925,8 +924,10 @@ void PepXMLClass::acquireModelParameters_HCD() {
 		ptr = curPSM->getParamList('u', 'u', 'i');
 		for(L = ptr->begin(); L != ptr->end(); L++) U_ints.push_back(*L);
 
-		ptr = curPSM->getParamList('u', 'u', 'd');
-		for(L = ptr->begin(); L != ptr->end(); L++) U_dist.push_back( *L );
+		if(g_DEBUG_MODE == 3) {
+			ptr = curPSM->getParamList('u', 'u', 'd');
+			for(L = ptr->begin(); L != ptr->end(); L++) U_dist.push_back( *L );
+		}
 	}
 
 
@@ -944,6 +945,7 @@ void PepXMLClass::acquireModelParameters_HCD() {
 			for(L = U_ints.begin(); L != U_ints.end(); L++) debug_modelData << "U_I\t" << *L << endl;
 			for(L = U_dist.begin(); L != U_dist.end(); L++) debug_modelData << "U_D\t" << *L << endl;
 
+			U_dist.clear(); // don't need this data any more
 			debug_modelData.close();
 		}
 
@@ -959,8 +961,6 @@ void PepXMLClass::acquireModelParameters_HCD() {
 		meanM_dist = getMode(&M_dist);
 		varM_dist  = getVar(&M_dist);
 
-		double meanU_dist = getMode(&U_dist);
-		double varU_dist  = getVar(&U_dist);
 
 		cerr << "\n# PSM: " << zN << " with Score >= " << g_model_prob << endl;
 
@@ -990,9 +990,9 @@ void PepXMLClass::acquireModelParameters_HCD() {
 		estimateNonparamInt_b(&M_ints_b, curParams, (g_MZ_ERR * 0.5));
 		estimateNonparamInt_y(&M_ints_y, curParams, (g_MZ_ERR * 0.5));
 		estimateNonparamInt_U(&U_ints, curParams, (g_MZ_ERR * 0.5));
-
 		estimateNonparamDist(&M_dist, curParams, (g_MZ_ERR * 0.5) );
-		estimateNonparamDist_U(&U_dist, curParams, (g_MZ_ERR * 0.5) );
+//		estimateNonparamDist_U(&U_dist, curParams, (g_MZ_ERR * 0.5) );
+		
 		/**********************************************************************
 		 * End nonparametric code
 		**********************************************************************/

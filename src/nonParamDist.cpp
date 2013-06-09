@@ -6,7 +6,7 @@
  */
 
 
-
+#include <algorithm>
 #include <map>
 #include <string>
 #include <iostream>
@@ -321,7 +321,6 @@ double mz_adjust_dist(double x) {
 
 
 
-
 void estimateNonparamDist(list<double> *ptr, modelParamStruct *paramPtr, double mz_err) {
 
 	deque<double> *X = new deque<double>;
@@ -329,7 +328,10 @@ void estimateNonparamDist(list<double> *ptr, modelParamStruct *paramPtr, double 
 	deque<double>::iterator tic;
 	deque<double>::iterator curPeak;
 
-	for(list<double>::iterator L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
+	// This is a more efficient way of converting the data from a list to a deque
+	int N = (signed)ptr->size();
+	X->resize( N );
+	std::copy(ptr->begin(), ptr->end(), X->begin());
 
 	int ntick = 2000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
@@ -343,12 +345,12 @@ void estimateNonparamDist(list<double> *ptr, modelParamStruct *paramPtr, double 
 		ii++;
 	}
 
-	nmatched = X->size();
+	nmatched = (signed) X->size();
 
-	double sigma = sqrt( getVar(ptr) );   // need writing another function for variance!!
+	double sigma = sqrt( getVar(ptr) );
 	paramPtr->bw_dist = 1.06 * (sigma / pow(nmatched, 0.2) );
 	paramPtr->bw_dist *= 0.1;
-	cerr << "Distance Matched NP Bandwidth: " << paramPtr->bw_dist << endl;
+	cerr << "Distance Matched NP Bandwidth: " << paramPtr->bw_dist << "\t(N = " << N << ")\n";
 
 	deque<double>::iterator curScore;
 	paramPtr->f_dist.resize(paramPtr->ntick_dist);
@@ -368,6 +370,8 @@ void estimateNonparamDist(list<double> *ptr, modelParamStruct *paramPtr, double 
 		ii++;
 	}
 
+	delete(X); X = NULL;
+	ptr->clear(); // free up memory
 }
 
 
@@ -379,7 +383,10 @@ void estimateNonparamDist_U(list<double> *ptr, modelParamStruct *paramPtr, doubl
 	deque<double>::iterator curPeak;
 	int jj;
 
-	for(list<double>::iterator L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
+	//This is a more efficient way of converting the data from a list to a deque
+	int N = (signed)ptr->size();
+	X->resize( N );
+	std::copy(ptr->begin(), ptr->end(), X->begin());
 
 	int ntick = 2000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
@@ -393,11 +400,11 @@ void estimateNonparamDist_U(list<double> *ptr, modelParamStruct *paramPtr, doubl
 		ii++;
 	}
 
-	nmatched = X->size();
+	nmatched = (signed) X->size();
 
 	double sigma = sqrt( getVar(ptr) );   // need writing another function for variance!!
 	paramPtr->bw_dist_U = 1.06 * (sigma / pow(nmatched, 0.2) );
-	cerr << "Distance Unmatched NP Bandwidth: " << paramPtr->bw_dist_U << endl;
+	cerr << "Distance Unmatched NP Bandwidth: " << paramPtr->bw_dist_U << "\t(N = " << N << ")\n";;
 
 
 	deque<double>::iterator curScore;
@@ -407,11 +414,14 @@ void estimateNonparamDist_U(list<double> *ptr, modelParamStruct *paramPtr, doubl
 
 
 	jj = 0;
+	/******************************
 	// iterate over real observations
 	for(curScore = X->begin(); curScore != X->end(); curScore++) {
 		jj++;
 	}
 	nmatched = jj;
+	*******************************/
+	nmatched = (signed) X->size();
 
 	ii = 0;
 	for(tic = paramPtr->tickMarks_dist_U.begin(); tic != paramPtr->tickMarks_dist_U.end(); tic++) {
@@ -426,6 +436,9 @@ void estimateNonparamDist_U(list<double> *ptr, modelParamStruct *paramPtr, doubl
 		paramPtr->f_dist_U.at(ii) = TINY_DEN;
 		ii++;
 	}
+
+	delete(X); X = NULL;
+	ptr->clear(); // free up memory
 }
 
 
@@ -442,7 +455,14 @@ void estimateNonparamInt_b(list<double> *ptr, modelParamStruct *paramPtr, double
 	deque<double>::iterator curPeak;
 	list<double>::iterator L;
 
-	for(L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
+
+	// This is a more efficient way of converting the data from a list to a deque
+	int N = (signed)ptr->size();
+	X->resize( N );
+	std::copy(ptr->begin(), ptr->end(), X->begin());
+
+
+	//for(L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
 
 	int ntick = 2000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
@@ -473,7 +493,7 @@ void estimateNonparamInt_b(list<double> *ptr, modelParamStruct *paramPtr, double
 	paramPtr->bw_int_b = 1.06 * (sigma / pow(nmatched, 0.2) );
 	paramPtr->bw_int_b *= 0.5;
 
-	cerr << "b-ion Intensity Matched NP Bandwidth: " << paramPtr->bw_int_b << endl;
+	cerr << "b-ion Intensity Matched NP Bandwidth: " << paramPtr->bw_int_b << "\t(N = " << N << ")\n";
 
 	deque<double>::iterator curScore;
 	paramPtr->f_int_b.resize(paramPtr->ntick_int);
@@ -503,7 +523,12 @@ void estimateNonparamInt_y(list<double> *ptr, modelParamStruct *paramPtr, double
 	deque<double>::iterator curPeak;
 	list<double>::iterator L;
 
-	for(L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
+	// This is a more efficient way of converting the data from a list to a deque
+	int N = (signed)ptr->size();
+	X->resize( N );
+	std::copy(ptr->begin(), ptr->end(), X->begin());
+
+	//for(L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
 
 	int ntick = 2000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
@@ -534,7 +559,7 @@ void estimateNonparamInt_y(list<double> *ptr, modelParamStruct *paramPtr, double
 	paramPtr->bw_int_y = 1.06 * (sigma / pow(nmatched, 0.2) );
 	paramPtr->bw_int_y *= 0.5;
 
-	cerr << "y-ion Intensity Matched NP Bandwidth: " << paramPtr->bw_int_y << endl;
+	cerr << "y-ion Intensity Matched NP Bandwidth: " << paramPtr->bw_int_y << "\t(N = " << N << ")\n";;
 
 	deque<double>::iterator curScore;
 	paramPtr->f_int_y.resize(paramPtr->ntick_int);
@@ -565,7 +590,14 @@ void estimateNonparamInt_U(list<double> *ptr, modelParamStruct *paramPtr, double
 	
 	int jj;
 
-	for(L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
+	// This is a more efficient way of converting the data from a list to a deque
+	int N = (signed)ptr->size();
+	X->resize( N );
+	std::copy(ptr->begin(), ptr->end(), X->begin());
+
+//	for(L = ptr->begin(); L != ptr->end(); L++) X->push_back(*L);
+
+
 
 	int ntick = 2000; // interval is from -mz_err to mz_err
 	double nmatched = 0;
@@ -598,7 +630,7 @@ void estimateNonparamInt_U(list<double> *ptr, modelParamStruct *paramPtr, double
 	paramPtr->bw_int_U = 1.06 * (sigma / pow(nmatched, 0.2) );
 	paramPtr->bw_int_U *= 0.5;
 
-	cerr << "Intensity Unmatched NP Bandwidth: " << paramPtr->bw_int_U << endl;
+	cerr << "Intensity Unmatched NP Bandwidth: " << paramPtr->bw_int_U << "\t(N = " << N << ")\n";
 
 
 	deque<double>::iterator curScore;
@@ -641,7 +673,7 @@ void printDensity(modelParamStruct *paramPtr) {
 	fd << "tic\tm\tu\n";
 	ii = 0;
 	for(tic = paramPtr->tickMarks_dist.begin(); tic != paramPtr->tickMarks_dist.end(); tic++) {
-		fd << *tic <<  "\t" << paramPtr->f_dist.at(ii) << "\t" <<  paramPtr->f_dist_U.at(ii) << endl;
+		fd << *tic <<  "\t" << paramPtr->f_dist.at(ii) << "\t" <<  TINY_DEN << endl;
 		ii++;
 	}
 	fd.close();			
